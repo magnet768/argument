@@ -657,9 +657,7 @@ function renderList() {
 
       if (state.mode === "split") {
         html += `<article class="arg-card is-split ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}</div>
-          <div><button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">+${escapeHtml(item.coord)} まとめ</button>
-          <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">-${escapeHtml(item.coord)} まとめ</button></div></div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}</div></div>
           <div class="split-grid">
             <div class="split-col is-plus"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.plusTitle)}</div><div>${escapeHtml(item.plusBody)}</div></div>
             <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${escapeHtml(item.minusBody)}</div></div>
@@ -749,7 +747,6 @@ function renderCommentsSection(item) {
 function renderComparePanel() {
   const item = findArg(state.selectedCoord) || state.arguments[0];
   if (!item) { els.comparePanel.innerHTML = `<p class="empty-muted">この論題にはまだ表示する命題がありません。</p>`; return; }
-  const topic = getCurrentTopic();
   const backRefs = referencedByMap.get(item.coord) || [];
   const list = getFilteredArguments();
   const idx = list.findIndex((a) => a.coord === item.coord);
@@ -778,12 +775,12 @@ function renderComparePanel() {
       <div class="compare-topic">${escapeHtml(item.topic)}</div>
       ${renderEvalControl(item.coord, { isPanel: true })}
       <div class="compare-box is-plus">
-        <div class="compare-box-head"><span class="coord-badge is-plus">+${escapeHtml(item.coord)} ${escapeHtml(topic.plusLabel)}</span>
+        <div class="compare-box-head"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span>
         <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">一覧で表示</button></div>
         <h3>${escapeHtml(item.plusTitle)}</h3><p>${escapeHtml(item.plusBody)}</p>
       </div>
       <div class="compare-box is-minus">
-        <div class="compare-box-head"><span class="coord-badge is-minus">-${escapeHtml(item.coord)} ${escapeHtml(topic.minusLabel)}</span>
+        <div class="compare-box-head"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span>
         <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">一覧で表示</button></div>
         <h3>${escapeHtml(item.minusTitle)}</h3><p>${escapeHtml(item.minusBody)}</p>
       </div>
