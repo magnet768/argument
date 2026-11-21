@@ -1069,7 +1069,7 @@ function renderList() {
           <article class="arg-card is-split ${selectedClass}" data-coord="${escapeHtml(item.coord)}">
             <div class="card-header">
               <div class="card-title-wrap">
-                <span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>
+                <span class="coord-badge is-neutral">${escapeHtml(item.coord)}</span>
                 ${bibPill}
               </div>
               <div>
@@ -1261,7 +1261,7 @@ function renderComparePanel() {
     <div class="detail-topbar">
       <div class="detail-topbar-left">
         <button type="button" class="detail-back-btn js-close-detail">← 一覧</button>
-        <span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>
+        <span class="coord-badge is-neutral">${escapeHtml(item.coord)}</span>
       </div>
       <div class="detail-topbar-right">
         <button type="button" class="detail-quick-btn js-scroll-comments">💬 コメント (${state.comments.length})</button>
@@ -1271,7 +1271,7 @@ function renderComparePanel() {
 
     <div class="detail-body">
       <div class="compare-head">
-        <h2>座標 ${escapeHtml(item.coord)}</h2>
+        <h2>${escapeHtml(item.coord)}</h2>
         <div class="compare-head-actions">
           <button type="button" class="flip-btn js-expand-detail" data-coord="${escapeHtml(item.coord)}">⤢ 拡大</button>
           ${state.isAdmin ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>` : ""}
