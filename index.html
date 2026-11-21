@@ -8,36 +8,41 @@
 </head>
 <body>
   <header class="site-header">
-    <!-- 全ページ共通のナビゲーションバー -->
-    <div class="global-nav-bar">
-      <div class="global-nav-inner">
-        <nav class="page-nav" aria-label="ページ切替">
-          <button type="button" class="page-nav-btn is-active" data-page="explorer">論証一覧</button>
-          <button type="button" class="page-nav-btn" data-page="guide">使い方</button>
-          <button type="button" class="page-nav-btn" data-page="profile">プロフィール</button>
-        </nav>
+    <!-- 最上段：三本線メニューボタン ＋ 論題切替（他ページではページ名を表示） -->
+    <div class="top-utility-bar">
+      <div class="top-utility-inner">
+        <button
+          type="button"
+          id="menu-open-btn"
+          class="hamburger-btn"
+          aria-label="メニューを開く"
+          aria-controls="nav-drawer"
+          aria-expanded="false"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
 
-        <div class="global-auth-bar">
-          <span id="admin-badge" class="admin-badge" hidden>管理者モード</span>
-          <button type="button" id="login-open-btn" class="admin-auth-btn">管理者ログイン</button>
-          <button type="button" id="logout-btn" class="admin-auth-btn" hidden>ログアウト</button>
+        <div id="top-topic-controls" class="top-topic-controls">
+          <div class="topic-select-wrap">
+            <label for="topic-select" class="topic-select-label">論題</label>
+            <select id="topic-select" class="topic-select" aria-label="論題を切り替え"></select>
+          </div>
+          <div class="topic-admin-actions">
+            <button type="button" id="edit-topic-btn" class="admin-action-btn is-secondary" hidden>この論題を編集</button>
+            <button type="button" id="add-topic-btn" class="admin-action-btn" hidden>+ 論題を追加</button>
+          </div>
         </div>
+
+        <div id="top-page-label" class="top-page-label" hidden></div>
+
+        <span id="admin-badge" class="admin-badge" hidden>管理者</span>
       </div>
     </div>
 
     <!-- 論証ページ専用の操作ヘッダー -->
     <div id="explorer-header-panel" class="header-inner">
-      <div class="topic-bar">
-        <div class="topic-select-wrap">
-          <label for="topic-select" class="topic-select-label">論題</label>
-          <select id="topic-select" class="topic-select" aria-label="論題を切り替え"></select>
-        </div>
-        <div class="topic-admin-actions">
-          <button type="button" id="edit-topic-btn" class="admin-action-btn is-secondary" hidden>この論題を編集</button>
-          <button type="button" id="add-topic-btn" class="admin-action-btn" hidden>+ 論題を追加</button>
-        </div>
-      </div>
-
       <div class="title-row">
         <div>
           <h1 id="site-title">反出生主義と反論：細分化論証エクスプローラー</h1>
@@ -74,6 +79,27 @@
       </div>
     </div>
   </header>
+
+  <!-- 折りたたみ式スライドメニュー（ドロワー） -->
+  <div id="nav-backdrop" class="nav-backdrop" hidden></div>
+  <aside id="nav-drawer" class="nav-drawer" aria-label="サイトメニュー" aria-hidden="true">
+    <div class="drawer-head">
+      <span class="drawer-title">メニュー</span>
+      <button type="button" id="menu-close-btn" class="modal-close" aria-label="メニューを閉じる">✕</button>
+    </div>
+
+    <nav class="drawer-nav" aria-label="ページ切替">
+      <button type="button" class="drawer-nav-btn is-active" data-page="explorer">論証一覧</button>
+      <button type="button" class="drawer-nav-btn" data-page="guide">このサイトの使い方</button>
+      <button type="button" class="drawer-nav-btn" data-page="profile">管理者プロフィール</button>
+    </nav>
+
+    <div class="drawer-footer">
+      <span id="drawer-admin-status" class="drawer-admin-status" hidden>管理者モードでログイン中</span>
+      <button type="button" id="login-open-btn" class="drawer-auth-btn">管理者ログイン</button>
+      <button type="button" id="logout-btn" class="drawer-auth-btn is-danger" hidden>ログアウト</button>
+    </div>
+  </aside>
 
   <!-- ページ1：論証エクスプローラー -->
   <div id="explorer-view" class="container">

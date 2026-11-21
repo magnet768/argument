@@ -61,6 +61,7 @@ if (isFirebaseConfigured) {
 // === 2. アプリケーション状態 ===
 const state = {
   page: "explorer",       // "explorer" | "guide" | "profile"
+  drawerOpen: false,
   profile: { ...DEFAULT_PROFILE },
   topics: [],
   topicsInDb: false,
@@ -88,7 +89,16 @@ let referencedByMap = new Map();
 
 // DOM 参照
 const els = {
-  pageNavButtons: document.querySelectorAll(".page-nav-btn"),
+  menuOpenBtn: document.getElementById("menu-open-btn"),
+  menuCloseBtn: document.getElementById("menu-close-btn"),
+  navDrawer: document.getElementById("nav-drawer"),
+  navBackdrop: document.getElementById("nav-backdrop"),
+  drawerNavButtons: document.querySelectorAll(".drawer-nav-btn"),
+  drawerAdminStatus: document.getElementById("drawer-admin-status"),
+
+  topTopicControls: document.getElementById("top-topic-controls"),
+  topPageLabel: document.getElementById("top-page-label"),
+
   explorerHeaderPanel: document.getElementById("explorer-header-panel"),
   explorerView: document.getElementById("explorer-view"),
   guideView: document.getElementById("guide-view"),
@@ -427,7 +437,23 @@ function focusCard(coord) {
   });
 }
 
-// === 4. ページ切替と専用詳細ページの開閉 ===
+// === 4. スライドメニュー・ページ切替・詳細ページ開閉 ===
+function openNavDrawer() {
+  state.drawerOpen = true;
+  els.navBackdrop.hidden = false;
+  els.navDrawer.classList.add("is-open");
+  els.navDrawer.setAttribute("aria-hidden", "false");
+  els.menuOpenBtn.setAttribute("aria-expanded", "true");
+}
+
+function closeNavDrawer() {
+  state.drawerOpen = false;
+  els.navBackdrop.hidden = true;
+  els.navDrawer.classList.remove("is-open");
+  els.navDrawer.setAttribute("aria-hidden", "true");
+  els.menuOpenBtn.setAttribute("aria-expanded", "false");
+}
+
 function applyDetailBodyClass() {
   const activeDetail = state.page === "explorer" && state.detailOpen;
   document.body.classList.toggle("is-detail-view", activeDetail);
@@ -435,6 +461,7 @@ function applyDetailBodyClass() {
 
 function switchPage(nextPage) {
   if (!["explorer", "guide", "profile"].includes(nextPage)) return;
+  closeNavDrawer();
   state.page = nextPage;
   if (nextPage !== "explorer" && state.detailOpen) {
     state.detailOpen = false;
@@ -618,7 +645,7 @@ async function loadArguments() {
         state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) =>
           compareNatural(a.coord, b.coord)
         );
-        showNotice("データベースに論証が未登録です。管理者ログイン後、「初期データをDBへ投入」を押すと初期データが登録されます。");
+        showNotice("データベースに論証が未登録です。左上のメニューから管理者ログイン後、「初期データをDBへ投入」を押すと初期データが登録されます。");
       } else {
         state.arguments = [];
         showNotice("");
@@ -793,9 +820,17 @@ function renderPageVisibility() {
   const isGuide = state.page === "guide";
   const isProfile = state.page === "profile";
 
-  els.pageNavButtons.forEach((btn) => {
+  els.drawerNavButtons.forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.page === state.page);
   });
+
+  els.topTopicControls.hidden = !isExplorer;
+  els.topPageLabel.hidden = isExplorer;
+  if (isGuide) {
+    els.topPageLabel.textContent = "このサイトの使い方";
+  } else if (isProfile) {
+    els.topPageLabel.textContent = "管理者プロフィール";
+  }
 
   els.explorerHeaderPanel.hidden = !isExplorer;
   els.explorerView.hidden = !isExplorer;
@@ -924,6 +959,7 @@ function renderTopicBar() {
 
 function renderAdminBar() {
   els.adminBadge.hidden = !state.isAdmin;
+  els.drawerAdminStatus.hidden = !state.isAdmin;
   els.editTopicBtn.hidden = !state.isAdmin;
   els.addTopicBtn.hidden = !state.isAdmin;
   els.addStageBtn.hidden = !state.isAdmin;
@@ -1528,13 +1564,23 @@ function openStageDialog(stageId = null) {
 }
 
 // === 9. イベント登録 ===
+els.menuOpenBtn.addEventListener("click", openNavDrawer);
+els.menuCloseBtn.addEventListener("click", closeNavDrawer);
+els.navBackdrop.addEventListener("click", closeNavDrawer);
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && state.drawerOpen) {
+    closeNavDrawer();
+  }
+});
+
 window.addEventListener("popstate", () => {
   if (state.detailOpen) {
     closeDetailView({ restoreScroll: true });
   }
 });
 
-els.pageNavButtons.forEach((btn) => {
+els.drawerNavButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     switchPage(btn.dataset.page);
   });
@@ -1564,6 +1610,7 @@ els.editTopicBtn.addEventListener("click", () => openTopicDialog(state.currentTo
 els.addTopicBtn.addEventListener("click", () => openTopicDialog(null));
 
 els.loginOpenBtn.addEventListener("click", () => {
+  closeNavDrawer();
   els.loginError.hidden = true;
   els.loginForm.reset();
   els.loginDialog.showModal();
@@ -1585,6 +1632,7 @@ els.loginForm.addEventListener("submit", async (e) => {
 
 els.logoutBtn.addEventListener("click", async () => {
   if (!auth) return;
+  closeNavDrawer();
   await signOut(auth);
 });
 
