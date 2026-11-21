@@ -1148,7 +1148,7 @@ function renderBibliographySection(item) {
   return `
     <section class="panel-section" id="detail-bib-section">
       <h3 class="panel-section-title">
-        <span>参考文献（座標 ${escapeHtml(item.coord)}）</span>
+        <span>参考文献</span>
         <span class="bib-count-pill">${item.bibliography.length}件</span>
       </h3>
       ${listHtml}
@@ -1235,7 +1235,7 @@ function renderCommentsSection(item) {
   return `
     <section class="panel-section" id="detail-comments-section">
       <h3 class="panel-section-title">
-        <span>閲覧者コメント（座標 ${escapeHtml(item.coord)}）</span>
+        <span>閲覧者コメント</span>
         <span class="bib-count-pill">${state.comments.length}件</span>
       </h3>
       ${bodyHtml}
@@ -1271,9 +1271,8 @@ function renderComparePanel() {
 
     <div class="detail-body">
       <div class="compare-head">
-        <h2>座標 ${escapeHtml(item.coord)} の比較</h2>
+        <h2>座標 ${escapeHtml(item.coord)}</h2>
         <div class="compare-head-actions">
-          <span class="coord-badge is-neutral">水準 ${escapeHtml(item.stage)}</span>
           <button type="button" class="flip-btn js-expand-detail" data-coord="${escapeHtml(item.coord)}">⤢ 拡大</button>
           ${state.isAdmin ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>` : ""}
         </div>
