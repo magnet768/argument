@@ -1698,3 +1698,76 @@ body.is-detail-view .detail-pager {
     gap: 6px;
   }
 }
+
+/* === 検索窓のスマホ表示改善 === */
+.search-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.search-input::placeholder {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+@media (max-width: 980px) {
+  .search-input {
+    padding: 9px 11px;
+    font-size: 16px; /* iOS Safariの入力時ズームを防止 */
+  }
+
+  .search-input::placeholder {
+    font-size: 13px; /* 小型スマホ幅でも全文が確実に収まるサイズ */
+    letter-spacing: -0.01em;
+  }
+}
+
+/* === コメントの本人編集・削除用スタイル === */
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.btn-xs-edit {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-xs-edit:hover {
+  background: var(--text);
+  color: #ffffff;
+  border-color: var(--text);
+}
+
+.comment-edited-tag {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+.comment-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.comment-edit-actions .btn-primary,
+.comment-edit-actions .btn-secondary {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.comment-note {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}

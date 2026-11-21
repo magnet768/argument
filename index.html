@@ -50,13 +50,13 @@
         </div>
 
         <div class="admin-bar">
-          <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 主張段階を追加</button>
-          <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規論証を追加</button>
+          <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 水準を追加</button>
+          <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規命題を追加</button>
           <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
         </div>
       </div>
 
-      <nav id="stage-tabs" class="stage-tabs" aria-label="主張段階の切替"></nav>
+      <nav id="stage-tabs" class="stage-tabs" aria-label="水準の切替"></nav>
 
       <div class="controls">
         <div class="mode-group" role="group" aria-label="表示モード">
@@ -69,12 +69,12 @@
           id="search-input"
           class="search-input"
           type="search"
-          placeholder="座標 (例: 1.21) やキーワード・参考文献で検索..."
-          aria-label="論証を検索"
+          placeholder="座標・キーワード・参考文献で検索..."
+          aria-label="命題を検索"
         />
 
         <button type="button" id="back-btn" class="back-btn" disabled>
-          ↩ 元の論証へ戻る
+          ↩ 元の命題へ戻る
         </button>
       </div>
     </div>
@@ -89,7 +89,7 @@
     </div>
 
     <nav class="drawer-nav" aria-label="ページ切替">
-      <button type="button" class="drawer-nav-btn is-active" data-page="explorer">論証一覧</button>
+      <button type="button" class="drawer-nav-btn is-active" data-page="explorer">命題一覧</button>
       <button type="button" class="drawer-nav-btn" data-page="guide">このサイトの使い方</button>
       <button type="button" class="drawer-nav-btn" data-page="profile">管理者プロフィール</button>
     </nav>
@@ -101,13 +101,13 @@
     </div>
   </aside>
 
-  <!-- ページ1：論証エクスプローラー -->
+  <!-- ページ1：論証エクスプローラー（命題一覧） -->
   <div id="explorer-view" class="container">
     <div id="status-notice" class="status-notice" hidden></div>
     <section id="stage-banner" class="stage-banner" aria-live="polite"></section>
 
     <main class="layout">
-      <section id="argument-list" class="argument-list" aria-label="論証一覧"></section>
+      <section id="argument-list" class="argument-list" aria-label="命題一覧"></section>
       <aside id="compare-panel" class="compare-panel" aria-label="1対1対照比較・参考文献・コメント"></aside>
     </main>
   </div>
@@ -118,14 +118,15 @@
       <header class="doc-header">
         <h2>このサイトの使い方</h2>
         <p class="doc-lead">
-          このサイトは、哲学的・倫理的な論争を立場の分かれうる最小単位まで細分化し、
-          数値座標を用いて<strong>「立場ごとの通読」</strong>と<strong>「対向論証との即座の比較」</strong>を両立させるための論証エクスプローラーです。
+          このサイトは、哲学的・倫理的な論争を立場の分かれうる最小単位の<strong>命題</strong>まで細分化し、
+          数値座標を用いて<strong>論証全体</strong>の構造を整理することで、
+          <strong>「立場ごとの通読」</strong>と<strong>「対向命題との即座の比較」</strong>を両立させるための論証エクスプローラーです。
         </p>
       </header>
 
       <section class="doc-section">
         <h3>1. 座標インデックスの読み方</h3>
-        <p>すべての論証には、極性（符号）と論理座標からなる固有のインデックスが付与されています。</p>
+        <p>論証を構成するすべての命題には、極性（符号）と論理座標からなる固有のインデックスが付与されています。</p>
         <div class="coord-anatomy">
           <div class="anatomy-badges">
             <span class="coord-badge is-plus">+1.21</span>
@@ -133,10 +134,10 @@
             <span class="coord-badge is-minus">-1.21</span>
           </div>
           <ul class="doc-list">
-            <li><strong>符号（<code>+</code> / <code>-</code>）</strong>：対立する2つの立場を表します。同じ番号で符号を反転させた論証どうしが、1対1で直接対立する論点ペアになっています。</li>
-            <li><strong>整数部（<code>1</code>, <code>2</code>, ...）</strong>：上部タブに対応する「主張段階」を表します（例：理想論レベル、実践規範レベルなど）。</li>
-            <li><strong>小数第1位（<code>.1</code>, <code>.2</code>, ...）</strong>：その段階の中でのトピック群（価値論、同意、義務論など）を表します。</li>
-            <li><strong>小数第2位（<code>0</code>, <code>1</code>, <code>2</code>...）</strong>：<code>0</code> がそのトピックの基底命題、<code>1</code> 以降がさらに細分化された分岐点です。</li>
+            <li><strong>符号（<code>+</code> / <code>-</code>）</strong>：対立する2つの立場を表します。同じ番号で符号を反転させた命題どうしが、1対1で直接対立するペアになっています。</li>
+            <li><strong>整数部（<code>1</code>, <code>2</code>, ...）</strong>：上部タブに対応する「水準」を表します（例：理想論の水準、実践規範の水準など）。</li>
+            <li><strong>小数第1位（<code>.1</code>, <code>.2</code>, ...）</strong>：その水準の中でのトピック群（価値論、同意、義務論など）を表します。</li>
+            <li><strong>小数第2位（<code>0</code>, <code>1</code>, <code>2</code>...）</strong>：<code>0</code> がそのトピックの基底命題、<code>1</code> 以降がさらに細分化された分岐命題です。</li>
           </ul>
         </div>
       </section>
@@ -145,20 +146,20 @@
         <h3>2. 基本的な操作と閲覧モード</h3>
         <div class="guide-grid">
           <div class="guide-box">
-            <h4>論題と主張段階を切り替える</h4>
-            <p>最上部の<strong>「論題」プルダウン</strong>からテーマを選び、その下の<strong>段階タブ</strong>で読みたい階層（または「全論点」）を切り替えます。</p>
+            <h4>論題と水準を切り替える</h4>
+            <p>最上部の<strong>「論題」プルダウン</strong>からテーマを選び、その下の<strong>水準タブ</strong>で読みたい水準（または「全命題」）を切り替えます。</p>
           </div>
           <div class="guide-box">
             <h4>3つの表示モードを使い分ける</h4>
-            <p><strong>+ / - まとめ</strong>では一方の立場だけを筋道立てて通読できます。<strong>⇄ 並置比較</strong>に切り替えると、全論点の賛否を左右に並べて俯瞰できます。</p>
+            <p><strong>+ / -</strong> では一方の立場に属する命題だけを筋道立てて通読できます。<strong>⇄ 並置比較</strong>に切り替えると、対立する命題を左右に並べて論証全体を俯瞰できます。</p>
           </div>
           <div class="guide-box">
             <h4>符号反転ジャンプと履歴戻り</h4>
-            <p>各カードの<strong>「⇄ 反転」ボタン</strong>を押すと、対向する立場の同一座標へ即座に移動して強調表示されます。<strong>「↩ 元の論証へ戻る」</strong>で直前の位置へ戻れます。</p>
+            <p>各カードの<strong>「⇄ 反転」ボタン</strong>を押すと、対向する立場の同一座標の命題へ即座に移動して強調表示されます。<strong>「↩ 元の命題へ戻る」</strong>で直前の位置へ戻れます。</p>
           </div>
           <div class="guide-box">
             <h4>前提・被参照リンクと検索</h4>
-            <p><strong>±1.10</strong> のようなチップを押すと、段階をまたいで前提論証や参照元の論証へ移動できます。検索欄では座標番号・本文・参考文献から絞り込めます。</p>
+            <p><strong>±1.10</strong> のようなチップを押すと、水準をまたいで前提命題や参照元の命題へ移動できます。検索欄では座標番号・命題本文・参考文献から絞り込めます。</p>
           </div>
         </div>
       </section>
@@ -166,22 +167,22 @@
       <section class="doc-section">
         <h3>3. PCとスマートフォンでの見方</h3>
         <ul class="doc-list">
-          <li><strong>PCで閲覧する場合</strong>：左側に論証一覧、右側に選択中座標の「1対1対照比較・参考文献・閲覧者コメント」が表示されます。各論証カードをクリックすると右側のパネルが切り替わります。右側上部の<strong>「⤢ 拡大」</strong>を押すと、その座標だけの集中画面に切り替えられます。</li>
-          <li><strong>スマートフォンで閲覧する場合</strong>：一覧画面で任意の論証カードをタップすると、その座標の<strong>専用詳細ページ</strong>へ移動します。詳細ページ右上の<strong>「💬 コメント」</strong>からコメント欄へすぐ移動でき、<strong>「← 一覧」</strong>（または端末の戻る操作）で元のスクロール位置へ戻れます。</li>
+          <li><strong>PCで閲覧する場合</strong>：左側に命題一覧、右側に選択中座標の「1対1対照比較・参考文献・閲覧者コメント」が表示されます。各命題カードをクリックすると右側のパネルが切り替わります。右側上部の<strong>「⤢ 拡大」</strong>を押すと、その座標だけの集中画面に切り替えられます。</li>
+          <li><strong>スマートフォンで閲覧する場合</strong>：一覧画面で任意の命題カードをタップすると、その座標の<strong>専用詳細ページ</strong>へ移動します。詳細ページ右上の<strong>「💬 コメント」</strong>からコメント欄へすぐ移動でき、<strong>「← 一覧」</strong>（または端末の戻る操作）で元のスクロール位置へ戻れます。</li>
         </ul>
       </section>
 
       <section class="doc-section">
         <h3>4. 参考文献の確認・コメント投稿・URL共有</h3>
         <ul class="doc-list">
-          <li><strong>参考文献</strong>：各座標の詳細パネル下部に、関連する書籍・論文・参照URLが整理されています。</li>
+          <li><strong>参考文献</strong>：各座標の詳細パネル下部に、その命題に関連する書籍・論文・参照URLが整理されています。</li>
           <li><strong>コメントの投稿</strong>：どの座標に対しても、座標全体・<code>+</code>側・<code>-</code>側のいずれかを指定して補足・反論・疑問を投稿できます（最大1000文字、空欄で匿名）。</li>
-          <li><strong>特定座標のURL共有</strong>：論証を選択するとブラウザのURL末尾に <code>#論題ID/+1.10</code> のような座標が自動付与されます。そのURLを共有すると、相手がその論証を直接開いた状態でアクセスできます。</li>
+          <li><strong>特定座標のURL共有</strong>：命題を選択するとブラウザのURL末尾に <code>#論題ID/+1.10</code> のような座標が自動付与されます。そのURLを共有すると、相手がその命題を直接開いた状態でアクセスできます。</li>
         </ul>
       </section>
 
       <div class="doc-footer-actions">
-        <button type="button" class="btn-primary js-go-explorer">← 論証一覧へ戻る</button>
+        <button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button>
       </div>
     </article>
   </div>
@@ -286,7 +287,7 @@
 
       <label class="field">
         <span>サブタイトル・説明（任意）</span>
-        <input type="text" id="topic-subtitle" placeholder="例：座標インデックスによる論点整理" />
+        <input type="text" id="topic-subtitle" placeholder="例：座標インデックスによる論証の構造化" />
       </label>
 
       <div class="form-grid-2">
@@ -312,11 +313,11 @@
     </form>
   </dialog>
 
-  <!-- 論証の追加・編集用ダイアログ（管理者専用） -->
+  <!-- 命題の追加・編集用ダイアログ（管理者専用） -->
   <dialog id="arg-dialog" class="modal modal-wide">
     <form id="arg-form" class="modal-form">
       <div class="modal-head">
-        <h2 id="arg-dialog-title">論証を編集</h2>
+        <h2 id="arg-dialog-title">命題を編集</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
 
@@ -328,8 +329,8 @@
 
         <div class="field">
           <div class="field-label-row">
-            <label for="arg-stage">主張段階</label>
-            <button type="button" id="inline-add-stage-btn" class="inline-link-btn">+ 段階を新規追加</button>
+            <label for="arg-stage">水準</label>
+            <button type="button" id="inline-add-stage-btn" class="inline-link-btn">+ 水準を新規追加</button>
           </div>
           <select id="arg-stage" required></select>
         </div>
@@ -367,7 +368,7 @@
       </div>
 
       <label class="field">
-        <span>前提論証の座標（カンマ区切り・任意 例：1.10, 1.21）</span>
+        <span>前提命題の座標（カンマ区切り・任意 例：1.10, 1.21）</span>
         <input type="text" id="arg-refs" placeholder="1.10, 1.21" />
       </label>
 
@@ -383,39 +384,39 @@
     </form>
   </dialog>
 
-  <!-- 主張段階の追加・編集用ダイアログ（管理者専用） -->
+  <!-- 水準の追加・編集用ダイアログ（管理者専用） -->
   <dialog id="stage-dialog" class="modal">
     <form id="stage-form" class="modal-form">
       <div class="modal-head">
-        <h2 id="stage-dialog-title">主張段階を追加</h2>
+        <h2 id="stage-dialog-title">水準を追加</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
 
       <div class="form-grid-2">
         <label class="field">
-          <span>段階番号（例：1）</span>
+          <span>水準番号（例：1）</span>
           <input type="text" id="stage-id" required placeholder="1" />
         </label>
         <label class="field">
           <span>タブ表示名</span>
-          <input type="text" id="stage-label" required placeholder="1. 基本前提の妥当性" />
+          <input type="text" id="stage-label" required placeholder="1. 価値論的水準" />
         </label>
       </div>
 
       <label class="field">
-        <span id="stage-plus-label-text">肯定側の基本主張 (+N)</span>
+        <span id="stage-plus-label-text">肯定側の基本命題 (+N)</span>
         <textarea id="stage-plus" rows="3" required placeholder="(+1) ..."></textarea>
       </label>
 
       <label class="field">
-        <span id="stage-minus-label-text">反論側の基本主張 (-N)</span>
+        <span id="stage-minus-label-text">反論側の基本命題 (-N)</span>
         <textarea id="stage-minus" rows="3" required placeholder="(-1) ..."></textarea>
       </label>
 
       <p id="stage-error" class="form-error" hidden></p>
 
       <div class="modal-actions is-between">
-        <button type="button" id="stage-delete-btn" class="btn-danger" hidden>この段階を削除</button>
+        <button type="button" id="stage-delete-btn" class="btn-danger" hidden>この水準を削除</button>
         <div class="modal-actions-right">
           <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
           <button type="submit" class="btn-primary">保存する</button>
