@@ -119,7 +119,6 @@ const els = {
   argList: document.getElementById("argument-list"),
   comparePanel: document.getElementById("compare-panel"),
   searchInput: document.getElementById("search-input"),
-  backBtn: document.getElementById("back-btn"),
   modeButtons: document.querySelectorAll(".mode-btn"),
   statusNotice: document.getElementById("status-notice"),
 
@@ -980,7 +979,6 @@ function renderModeButtons() {
     if (mode === "split") btn.textContent = "⇄ 比較";
     btn.classList.toggle("is-active", mode === state.mode);
   });
-  els.backBtn.disabled = state.history.length === 0;
 }
 
 function renderStageBanner() {
@@ -1938,8 +1936,6 @@ els.searchInput.addEventListener("input", (e) => {
   state.query = e.target.value;
   renderList();
 });
-
-els.backBtn.addEventListener("click", goBack);
 
 els.argList.addEventListener("click", (e) => {
   const flipBtn = e.target.closest(".js-flip-btn, .js-jump-mode");
