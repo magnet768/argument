@@ -1899,34 +1899,36 @@ body.is-detail-view .detail-pager {
   color: #ffffff;
 }
 
-/* === スマホでの表示モード・水準タブの横スクロールと右端フェード === */
-@media (max-width: 720px) {
+/* === スマホでの表示モード（4つを1行に収める）と水準タブの右端フェード === */
+@media (max-width: 980px) {
   .controls {
     min-width: 0;
   }
 
   .mode-group {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
     max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    padding-right: 28px;
-    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
-  }
-
-  .mode-group::-webkit-scrollbar {
-    display: none;
+    overflow: hidden !important;
+    padding-right: 0;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 
   .mode-btn {
-    flex: 0 0 auto;
+    min-width: 0;
+    padding: 7px 4px !important;
+    font-size: 0.78rem !important;
+    text-align: center;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .stage-tabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
     padding-right: 28px;
     -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
     mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
