@@ -60,6 +60,7 @@ const isMobileViewport = () => window.matchMedia("(max-width: 980px)").matches;
 const escapeHtml = (str) => String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const safeUrl = (url) => (/^https?:\/\//i.test(String(url ?? "").trim()) ? String(url).trim() : "");
 const compareNatural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+const formatBasicProp = (text) => String(text ?? "").replace(/^(\s*\([+-]\d+)(\))/, "$1.00$2").replace(/^(\s*[+-]\d+)(?=\s|$)/, "$1.00");
 
 const normalizeProfile = (raw = {}) => ({
   name: String(raw.name ?? "").trim(), role: String(raw.role ?? "").trim(), bio: String(raw.bio ?? "").trim(),
@@ -574,8 +575,8 @@ function renderStageBanner() {
   if (!info) { els.stageBanner.innerHTML = ""; return; }
   const topic = getCurrentTopic();
   const editBtn = state.isAdmin ? `<button type="button" class="banner-edit-btn js-edit-stage" data-stage-id="${escapeHtml(info.id)}">この水準を編集</button>` : "";
-  const boxes = `<div class="banner-box is-plus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.plusLabel)}の基本命題</span>${editBtn}</div><div>${escapeHtml(info.plus)}</div></div>
-    <div class="banner-box is-minus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.minusLabel)}の基本命題</span></div><div>${escapeHtml(info.minus)}</div></div>`;
+  const boxes = `<div class="banner-box is-plus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.plusLabel)}の基本命題</span>${editBtn}</div><div>${escapeHtml(formatBasicProp(info.plus))}</div></div>
+    <div class="banner-box is-minus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.minusLabel)}の基本命題</span></div><div>${escapeHtml(formatBasicProp(info.minus))}</div></div>`;
   els.stageBanner.innerHTML = `<div class="stage-banner-grid">${boxes}</div><details class="stage-banner-accordion"><summary class="stage-banner-summary"><span>基本命題</span></summary><div class="stage-banner-accordion-body">${boxes}</div></details>`;
 }
 function renderRefChips(refs, label) {
@@ -858,15 +859,17 @@ function openArgDialog(coord = null) {
 function openStageDialog(stageId = null) {
   const topic = getCurrentTopic();
   els.stageError.hidden = true;
-  els.stagePlusLabelText.textContent = `${topic.plusLabel}の基本命題 (+N)`;
-  els.stageMinusLabelText.textContent = `${topic.minusLabel}の基本命題 (-N)`;
+  els.stagePlusLabelText.textContent = `${topic.plusLabel}の基本命題 (+N.00)`;
+  els.stageMinusLabelText.textContent = `${topic.minusLabel}の基本命題 (-N.00)`;
   state.editingStageId = stageId;
   if (stageId) {
     const info = findStage(stageId);
     if (!info) return;
     els.stageDialogTitle.textContent = `水準 ${stageId} を編集`;
     els.stageId.value = info.id; els.stageId.readOnly = true;
-    els.stageLabel.value = info.label; els.stagePlus.value = info.plus; els.stageMinus.value = info.minus;
+    els.stageLabel.value = info.label;
+    els.stagePlus.value = formatBasicProp(info.plus);
+    els.stageMinus.value = formatBasicProp(info.minus);
     els.stageDeleteBtn.hidden = false;
   } else {
     const nums = state.stages.map((s) => Number(s.id)).filter((n) => Number.isInteger(n) && n >= 0);
@@ -874,8 +877,8 @@ function openStageDialog(stageId = null) {
     els.stageDialogTitle.textContent = "新しい水準を追加";
     els.stageForm.reset(); els.stageId.readOnly = false; els.stageId.value = nextId;
     els.stageLabel.placeholder = `${nextId}. 新しい水準の名称`;
-    els.stagePlus.placeholder = `(+${nextId}) ${topic.plusLabel}の基本命題を記入`;
-    els.stageMinus.placeholder = `(-${nextId}) ${topic.minusLabel}の基本命題を記入`;
+    els.stagePlus.placeholder = `(+${nextId}.00) ${topic.plusLabel}の基本命題を記入`;
+    els.stageMinus.placeholder = `(-${nextId}.00) ${topic.minusLabel}の基本命題を記入`;
     els.stageDeleteBtn.hidden = true;
   }
   els.stageDialog.showModal();
@@ -1028,7 +1031,7 @@ els.stageForm.addEventListener("submit", async (e) => {
   if (!state.editingStageId && findStage(id)) { els.stageError.textContent = `水準 ${id} はすでに存在します。`; els.stageError.hidden = false; return; }
   try {
     await ensureStagesSeededInDb();
-    await setDoc(stageDoc(id), { id, label: els.stageLabel.value.trim(), plus: els.stagePlus.value.trim(), minus: els.stageMinus.value.trim(), updatedAt: serverTimestamp() });
+    await setDoc(stageDoc(id), { id, label: els.stageLabel.value.trim(), plus: formatBasicProp(els.stagePlus.value.trim()), minus: formatBasicProp(els.stageMinus.value.trim()), updatedAt: serverTimestamp() });
     els.stageDialog.close();
     await loadStages();
     if (els.argDialog.open) populateStageSelect(id); else state.stage = id;

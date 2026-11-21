@@ -105,8 +105,8 @@
           <ul class="doc-list">
             <li><strong>符号（<code>+</code> / <code>-</code>）</strong>：対立する2つの立場を表します。同じ番号で符号を反転させた命題どうしが、1対1で直接対立するペアになっています。</li>
             <li><strong>整数部（<code>1</code>, <code>2</code>, ...）</strong>：上部タブに対応する「水準」を表します（例：理想論の水準、実践規範の水準など）。</li>
-            <li><strong>小数第1位（<code>.1</code>, <code>.2</code>, ...）</strong>：その水準の中でのトピック群（価値論、同意、義務論など）を表します。</li>
-            <li><strong>小数第2位（<code>.10</code>, <code>.11</code>, <code>.12</code>, ...）</strong>：<code>0</code> がそのトピックの基底命題、<code>1</code> 以降がさらに細分化された分岐命題です。</li>
+            <li><strong>小数第一位（<code>.0</code>, <code>.1</code>, ...）</strong>：<code>.0</code> はその水準の基本命題、<code>.1</code> 以降はその水準の中でのトピック群（価値論、同意、義務論など）を表します。</li>
+            <li><strong>小数第二位（<code>.00</code>, <code>.10</code>, <code>.11</code>, ...）</strong>：<code>0</code> がそのトピックの基底命題、<code>1</code> 以降がさらに細分化された分岐命題です。</li>
           </ul>
         </div>
       </section>
@@ -123,7 +123,7 @@
             <p><strong>+ / -</strong> では一方の立場に属する命題だけを通読できます。<strong>⇄ 比較</strong>では対立する命題を左右に並べて俯瞰でき、<strong>☆自説</strong>では自分が採用した極性の命題だけを一覧表示できます。</p>
           </div>
           <div class="guide-box">
-            <h4>極性（符号）の反転と命題の評価</h4>
+            <h4>極性（符号）の反転と主張の評価</h4>
             <p>各カードの<strong>「⇄ 反転」ボタン</strong>を押すと、対向する立場の同一座標の命題へ即座に移動して強調表示できます。また、一覧カードおよび詳細ページの<strong>「<code>+</code> / <code>=</code> / <code>-</code>」ボタン</strong>から、各主張をその論題の <code>+</code> 側・保留（<code>=</code>）・<code>-</code> 側のいずれかで評価してブラウザに記憶させられます（初期状態は<code>=</code>）。ある主張の評価を変更すると、それを前提とする主張が自動的に同じ評価になります。</p>
           </div>
           <div class="guide-box">
@@ -274,8 +274,8 @@
         <label class="field"><span>水準番号（例：1）</span><input type="text" id="stage-id" required placeholder="1" /></label>
         <label class="field"><span>タブ表示名</span><input type="text" id="stage-label" required placeholder="1. 価値論的水準" /></label>
       </div>
-      <label class="field"><span id="stage-plus-label-text">肯定側の基本命題 (+N)</span><textarea id="stage-plus" rows="3" required placeholder="(+1) ..."></textarea></label>
-      <label class="field"><span id="stage-minus-label-text">反論側の基本命題 (-N)</span><textarea id="stage-minus" rows="3" required placeholder="(-1) ..."></textarea></label>
+      <label class="field"><span id="stage-plus-label-text">肯定側の基本命題 (+N.00)</span><textarea id="stage-plus" rows="3" required placeholder="(+1.00) ..."></textarea></label>
+      <label class="field"><span id="stage-minus-label-text">反論側の基本命題 (-N.00)</span><textarea id="stage-minus" rows="3" required placeholder="(-1.00) ..."></textarea></label>
       <p id="stage-error" class="form-error" hidden></p>
       <div class="modal-actions is-between">
         <button type="button" id="stage-delete-btn" class="btn-danger" hidden>この水準を削除</button>
