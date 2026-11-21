@@ -9,10 +9,22 @@
 <body>
   <header class="site-header">
     <div class="header-inner">
+      <!-- 論題切替バー -->
+      <div class="topic-bar">
+        <div class="topic-select-wrap">
+          <label for="topic-select" class="topic-select-label">論題</label>
+          <select id="topic-select" class="topic-select" aria-label="論題を切り替え"></select>
+        </div>
+        <div class="topic-admin-actions">
+          <button type="button" id="edit-topic-btn" class="admin-action-btn is-secondary" hidden>この論題を編集</button>
+          <button type="button" id="add-topic-btn" class="admin-action-btn" hidden>+ 論題を追加</button>
+        </div>
+      </div>
+
       <div class="title-row">
         <div>
-          <h1>反出生主義と反論：細分化論証エクスプローラー</h1>
-          <span class="subtitle">座標インデックスによる立場別通読・符号反転比較・参考文献・議論コメント</span>
+          <h1 id="site-title">反出生主義と反論：細分化論証エクスプローラー</h1>
+          <span id="site-subtitle" class="subtitle">座標インデックスによる立場別通読・符号反転比較・参考文献・議論コメント</span>
         </div>
 
         <div class="admin-bar">
@@ -29,8 +41,8 @@
 
       <div class="controls">
         <div class="mode-group" role="group" aria-label="表示モード">
-          <button type="button" class="mode-btn" data-mode="plus">+ 肯定まとめ</button>
-          <button type="button" class="mode-btn" data-mode="minus">- 反論まとめ</button>
+          <button type="button" class="mode-btn" data-mode="plus">+ 肯定側</button>
+          <button type="button" class="mode-btn" data-mode="minus">- 反論側</button>
           <button type="button" class="mode-btn" data-mode="split">⇄ 並置比較</button>
         </div>
 
@@ -82,6 +94,52 @@
     </form>
   </dialog>
 
+  <!-- 論題の追加・編集用ダイアログ（管理者専用） -->
+  <dialog id="topic-dialog" class="modal">
+    <form id="topic-form" class="modal-form">
+      <div class="modal-head">
+        <h2 id="topic-dialog-title">新しい論題を追加</h2>
+        <button type="button" class="modal-close js-close-dialog">✕</button>
+      </div>
+
+      <label class="field">
+        <span>論題ID（URL用の半角英数字・ハイフン 例：death-penalty）</span>
+        <input type="text" id="topic-id" required placeholder="death-penalty" />
+      </label>
+
+      <label class="field">
+        <span>論題タイトル</span>
+        <input type="text" id="topic-title" required placeholder="例：死刑制度の是非と反論" />
+      </label>
+
+      <label class="field">
+        <span>サブタイトル・説明（任意）</span>
+        <input type="text" id="topic-subtitle" placeholder="例：座標インデックスによる論点整理" />
+      </label>
+
+      <div class="form-grid-2">
+        <label class="field">
+          <span>「+」側の呼び名</span>
+          <input type="text" id="topic-plus-label" required placeholder="肯定側" />
+        </label>
+        <label class="field">
+          <span>「-」側の呼び名</span>
+          <input type="text" id="topic-minus-label" required placeholder="反論側" />
+        </label>
+      </div>
+
+      <p id="topic-error" class="form-error" hidden></p>
+
+      <div class="modal-actions is-between">
+        <button type="button" id="topic-delete-btn" class="btn-danger" hidden>この論題を削除</button>
+        <div class="modal-actions-right">
+          <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
+          <button type="submit" class="btn-primary">保存する</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
   <!-- 論証の追加・編集用ダイアログ（管理者専用） -->
   <dialog id="arg-dialog" class="modal modal-wide">
     <form id="arg-form" class="modal-form">
@@ -92,7 +150,7 @@
 
       <div class="form-grid-2">
         <label class="field">
-          <span>座標（例：1.10 / 5.10）</span>
+          <span>座標（例：1.10 / 2.10a）</span>
           <input type="text" id="arg-coord" required placeholder="1.10" />
         </label>
 
@@ -112,7 +170,7 @@
 
       <div class="form-grid-2">
         <div class="edit-box is-plus">
-          <h3>肯定側 (+)</h3>
+          <h3 id="arg-plus-heading">肯定側 (+)</h3>
           <label class="field">
             <span>見出し</span>
             <input type="text" id="arg-plus-title" required />
@@ -124,7 +182,7 @@
         </div>
 
         <div class="edit-box is-minus">
-          <h3>反論側 (-)</h3>
+          <h3 id="arg-minus-heading">反論側 (-)</h3>
           <label class="field">
             <span>見出し</span>
             <input type="text" id="arg-minus-title" required />
@@ -163,23 +221,23 @@
 
       <div class="form-grid-2">
         <label class="field">
-          <span>段階番号（例：5）</span>
-          <input type="text" id="stage-id" required placeholder="5" />
+          <span>段階番号（例：1）</span>
+          <input type="text" id="stage-id" required placeholder="1" />
         </label>
         <label class="field">
           <span>タブ表示名</span>
-          <input type="text" id="stage-label" required placeholder="5. 法的・制度的実装" />
+          <input type="text" id="stage-label" required placeholder="1. 基本前提の妥当性" />
         </label>
       </div>
 
       <label class="field">
-        <span>肯定側の基本主張 (+N)</span>
-        <textarea id="stage-plus" rows="3" required placeholder="(+5) ..."></textarea>
+        <span id="stage-plus-label-text">肯定側の基本主張 (+N)</span>
+        <textarea id="stage-plus" rows="3" required placeholder="(+1) ..."></textarea>
       </label>
 
       <label class="field">
-        <span>反論側の基本主張 (-N)</span>
-        <textarea id="stage-minus" rows="3" required placeholder="(-5) ..."></textarea>
+        <span id="stage-minus-label-text">反論側の基本主張 (-N)</span>
+        <textarea id="stage-minus" rows="3" required placeholder="(-1) ..."></textarea>
       </label>
 
       <p id="stage-error" class="form-error" hidden></p>

@@ -23,6 +23,16 @@ import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
 
+const DEFAULT_TOPIC = {
+  id: "antinatalism",
+  title: "反出生主義と反論：細分化論証エクスプローラー",
+  subtitle: "座標インデックスによる立場別通読・符号反転比較・参考文献・議論コメント",
+  plusLabel: "肯定側",
+  minusLabel: "反論側",
+  order: 1,
+  useLegacyRoot: true
+};
+
 // === 1. Firebase 初期化 ===
 const isFirebaseConfigured =
   firebaseConfig &&
@@ -40,21 +50,25 @@ if (isFirebaseConfigured) {
 
 // === 2. アプリケーション状態 ===
 const state = {
+  topics: [],
+  topicsInDb: false,
+  currentTopicId: DEFAULT_TOPIC.id,
   stages: [],
   stagesInDb: false,
   arguments: [],
   stage: "1",
   mode: "plus",           // "plus" | "minus" | "split"
-  selectedCoord: "1.10",
+  selectedCoord: "",
   query: "",
   history: [],
   isAdmin: false,
   comments: [],
   commentsLoading: false,
+  editingTopicId: null,
   editingCoord: null,
   editingStageId: null,
-  detailOpen: false,      // 専用詳細ページを表示中か
-  savedListScrollY: 0,    // 一覧へ戻るときのスクロール位置
+  detailOpen: false,
+  savedListScrollY: 0,
   pushedDetailHistory: false
 };
 
@@ -62,6 +76,12 @@ let referencedByMap = new Map();
 
 // DOM 参照
 const els = {
+  topicSelect: document.getElementById("topic-select"),
+  editTopicBtn: document.getElementById("edit-topic-btn"),
+  addTopicBtn: document.getElementById("add-topic-btn"),
+  siteTitle: document.getElementById("site-title"),
+  siteSubtitle: document.getElementById("site-subtitle"),
+
   stageTabs: document.getElementById("stage-tabs"),
   stageBanner: document.getElementById("stage-banner"),
   argList: document.getElementById("argument-list"),
@@ -84,6 +104,17 @@ const els = {
   loginPassword: document.getElementById("login-password"),
   loginError: document.getElementById("login-error"),
 
+  topicDialog: document.getElementById("topic-dialog"),
+  topicDialogTitle: document.getElementById("topic-dialog-title"),
+  topicForm: document.getElementById("topic-form"),
+  topicId: document.getElementById("topic-id"),
+  topicTitle: document.getElementById("topic-title"),
+  topicSubtitle: document.getElementById("topic-subtitle"),
+  topicPlusLabel: document.getElementById("topic-plus-label"),
+  topicMinusLabel: document.getElementById("topic-minus-label"),
+  topicDeleteBtn: document.getElementById("topic-delete-btn"),
+  topicError: document.getElementById("topic-error"),
+
   argDialog: document.getElementById("arg-dialog"),
   argDialogTitle: document.getElementById("arg-dialog-title"),
   argForm: document.getElementById("arg-form"),
@@ -91,6 +122,8 @@ const els = {
   argStage: document.getElementById("arg-stage"),
   inlineAddStageBtn: document.getElementById("inline-add-stage-btn"),
   argTopic: document.getElementById("arg-topic"),
+  argPlusHeading: document.getElementById("arg-plus-heading"),
+  argMinusHeading: document.getElementById("arg-minus-heading"),
   argPlusTitle: document.getElementById("arg-plus-title"),
   argPlusBody: document.getElementById("arg-plus-body"),
   argMinusTitle: document.getElementById("arg-minus-title"),
@@ -104,13 +137,15 @@ const els = {
   stageForm: document.getElementById("stage-form"),
   stageId: document.getElementById("stage-id"),
   stageLabel: document.getElementById("stage-label"),
+  stagePlusLabelText: document.getElementById("stage-plus-label-text"),
+  stageMinusLabelText: document.getElementById("stage-minus-label-text"),
   stagePlus: document.getElementById("stage-plus"),
   stageMinus: document.getElementById("stage-minus"),
   stageDeleteBtn: document.getElementById("stage-delete-btn"),
   stageError: document.getElementById("stage-error")
 };
 
-// === 3. ユーティリティ ===
+// === 3. ユーティリティ & 論題ごとの参照先解決 ===
 function isMobileViewport() {
   return window.matchMedia("(max-width: 980px)").matches;
 }
@@ -131,6 +166,22 @@ function safeUrl(url) {
 
 function compareNatural(a, b) {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+}
+
+function normalizeTopic(raw) {
+  const id = String(raw.id).trim();
+  return {
+    id,
+    title: String(raw.title ?? id).trim(),
+    subtitle: String(raw.subtitle ?? "").trim(),
+    plusLabel: String(raw.plusLabel ?? "肯定側").trim() || "肯定側",
+    minusLabel: String(raw.minusLabel ?? "反論側").trim() || "反論側",
+    order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : 9999,
+    useLegacyRoot:
+      typeof raw.useLegacyRoot === "boolean"
+        ? raw.useLegacyRoot
+        : id === DEFAULT_TOPIC.id
+  };
 }
 
 function normalizeStage(raw) {
@@ -160,6 +211,56 @@ function normalizeArg(raw) {
     refs: Array.isArray(raw.refs) ? raw.refs.filter(Boolean) : [],
     bibliography: Array.isArray(raw.bibliography) ? raw.bibliography : []
   };
+}
+
+function findTopic(id) {
+  return state.topics.find((t) => t.id === id);
+}
+
+function getCurrentTopic() {
+  return findTopic(state.currentTopicId) || state.topics[0] || DEFAULT_TOPIC;
+}
+
+function isLegacyTopic(topicId = state.currentTopicId) {
+  const t = findTopic(topicId);
+  return Boolean(t ? t.useLegacyRoot : topicId === DEFAULT_TOPIC.id);
+}
+
+// 既存データ（初期の反出生主義論題）はルート領域、新規論題は topics/{id} 配下を使用
+function stagesCollection(topicId = state.currentTopicId) {
+  return isLegacyTopic(topicId)
+    ? collection(db, "stages")
+    : collection(db, "topics", topicId, "stages");
+}
+
+function stageDoc(stageId, topicId = state.currentTopicId) {
+  return isLegacyTopic(topicId)
+    ? doc(db, "stages", stageId)
+    : doc(db, "topics", topicId, "stages", stageId);
+}
+
+function argumentsCollection(topicId = state.currentTopicId) {
+  return isLegacyTopic(topicId)
+    ? collection(db, "arguments")
+    : collection(db, "topics", topicId, "arguments");
+}
+
+function argumentDoc(coord, topicId = state.currentTopicId) {
+  return isLegacyTopic(topicId)
+    ? doc(db, "arguments", coord)
+    : doc(db, "topics", topicId, "arguments", coord);
+}
+
+function commentsCollection(topicId = state.currentTopicId) {
+  return isLegacyTopic(topicId)
+    ? collection(db, "comments")
+    : collection(db, "topics", topicId, "comments");
+}
+
+function commentDoc(commentId, topicId = state.currentTopicId) {
+  return isLegacyTopic(topicId)
+    ? doc(db, "comments", commentId)
+    : doc(db, "topics", topicId, "comments", commentId);
 }
 
 function rebuildReferencedByMap() {
@@ -208,9 +309,13 @@ function formatDate(ts) {
 }
 
 function getCurrentHash() {
-  if (!state.selectedCoord) return "";
+  const topicId = state.currentTopicId;
+  if (!topicId) return "";
+  if (!state.selectedCoord) {
+    return `#${encodeURIComponent(topicId)}`;
+  }
   const prefix = state.mode === "plus" ? "+" : state.mode === "minus" ? "-" : "";
-  return `#${prefix}${state.selectedCoord}`;
+  return `#${encodeURIComponent(topicId)}/${prefix}${state.selectedCoord}`;
 }
 
 function syncUrlHash() {
@@ -223,19 +328,34 @@ function syncUrlHash() {
   }
 }
 
-function parseInitialHash() {
+// URLハッシュを「論題ID」と「座標トークン」に分解（旧形式 #+1.10 も互換維持）
+function parseUrlHashTokens() {
   const raw = decodeURIComponent(window.location.hash.replace(/^#/, "")).trim();
-  if (!raw) return false;
+  if (!raw) return { topicId: null, coordToken: "" };
 
+  if (raw.includes("/")) {
+    const [maybeTopic, ...rest] = raw.split("/");
+    return { topicId: maybeTopic.trim(), coordToken: rest.join("/").trim() };
+  }
+
+  if (findTopic(raw)) {
+    return { topicId: raw, coordToken: "" };
+  }
+
+  return { topicId: null, coordToken: raw };
+}
+
+function applyCoordToken(coordToken) {
+  if (!coordToken) return false;
   let mode = state.mode;
-  let coord = raw;
+  let coord = coordToken;
 
-  if (raw.startsWith("+")) {
+  if (coordToken.startsWith("+")) {
     mode = "plus";
-    coord = raw.slice(1);
-  } else if (raw.startsWith("-")) {
+    coord = coordToken.slice(1);
+  } else if (coordToken.startsWith("-")) {
     mode = "minus";
-    coord = raw.slice(1);
+    coord = coordToken.slice(1);
   }
 
   const found = findArg(coord);
@@ -320,8 +440,48 @@ function requestCloseDetailView() {
 }
 
 // === 5. Firestore データ操作 ===
+async function loadTopics() {
+  if (!db) {
+    state.topics = [normalizeTopic(DEFAULT_TOPIC)];
+    state.topicsInDb = false;
+    return;
+  }
+
+  try {
+    const snap = await getDocs(collection(db, "topics"));
+    if (snap.empty) {
+      state.topics = [normalizeTopic(DEFAULT_TOPIC)];
+      state.topicsInDb = false;
+    } else {
+      const rows = [];
+      snap.forEach((docSnap) => {
+        rows.push(normalizeTopic({ id: docSnap.id, ...docSnap.data() }));
+      });
+      state.topics = rows.sort(
+        (a, b) => a.order - b.order || compareNatural(a.id, b.id)
+      );
+      state.topicsInDb = true;
+    }
+  } catch (err) {
+    console.error(err);
+    state.topics = [normalizeTopic(DEFAULT_TOPIC)];
+    state.topicsInDb = false;
+  }
+}
+
+async function ensureTopicsSeededInDb() {
+  if (!db || !state.isAdmin || state.topicsInDb) return;
+  await setDoc(doc(db, "topics", DEFAULT_TOPIC.id), {
+    ...DEFAULT_TOPIC,
+    updatedAt: serverTimestamp()
+  });
+  state.topicsInDb = true;
+}
+
 async function loadStages() {
-  const fallback = getDefaultStagesList();
+  const legacy = isLegacyTopic(state.currentTopicId);
+  const fallback = legacy ? getDefaultStagesList() : [];
+
   if (!db) {
     state.stages = fallback;
     state.stagesInDb = false;
@@ -329,7 +489,7 @@ async function loadStages() {
   }
 
   try {
-    const snap = await getDocs(collection(db, "stages"));
+    const snap = await getDocs(stagesCollection());
     if (snap.empty) {
       state.stages = fallback;
       state.stagesInDb = false;
@@ -349,10 +509,10 @@ async function loadStages() {
 }
 
 async function ensureStagesSeededInDb() {
-  if (!db || !state.isAdmin || state.stagesInDb) return;
+  if (!db || !state.isAdmin || state.stagesInDb || !isLegacyTopic()) return;
   const defaults = getDefaultStagesList();
   for (const st of defaults) {
-    await setDoc(doc(db, "stages", st.id), {
+    await setDoc(stageDoc(st.id), {
       ...st,
       updatedAt: serverTimestamp()
     });
@@ -361,19 +521,30 @@ async function ensureStagesSeededInDb() {
 }
 
 async function loadArguments() {
+  const legacy = isLegacyTopic(state.currentTopicId);
+
   if (!db) {
-    state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord));
+    state.arguments = legacy
+      ? DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord))
+      : [];
     rebuildReferencedByMap();
     showNotice("firebase-config.js が未設定のため、ローカルの初期データのみで閲覧モード表示しています。");
     return;
   }
 
   try {
-    const snap = await getDocs(collection(db, "arguments"));
+    const snap = await getDocs(argumentsCollection());
     if (snap.empty) {
-      state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord));
+      if (legacy) {
+        state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) =>
+          compareNatural(a.coord, b.coord)
+        );
+        showNotice("データベースに論証が未登録です。管理者ログイン後、「初期データをDBへ投入」を押すと初期データが登録されます。");
+      } else {
+        state.arguments = [];
+        showNotice("");
+      }
       rebuildReferencedByMap();
-      showNotice("データベースに論証が未登録です。管理者ログイン後、右上の「初期データをDBへ投入」を押すと初期データが登録されます。");
     } else {
       const rows = [];
       snap.forEach((docSnap) => {
@@ -385,7 +556,9 @@ async function loadArguments() {
     }
   } catch (err) {
     console.error(err);
-    state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord));
+    state.arguments = legacy
+      ? DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord))
+      : [];
     rebuildReferencedByMap();
     showNotice("データベースの読み込みに失敗しました。Firebaseの設定とルールを確認してください。");
   }
@@ -399,11 +572,12 @@ async function loadCommentsForCoord(coord) {
     return;
   }
 
+  const targetTopicId = state.currentTopicId;
   state.commentsLoading = true;
   renderComparePanel();
 
   try {
-    const q = query(collection(db, "comments"), where("coord", "==", coord));
+    const q = query(commentsCollection(targetTopicId), where("coord", "==", coord));
     const snap = await getDocs(q);
     const list = [];
     snap.forEach((docSnap) => {
@@ -414,7 +588,7 @@ async function loadCommentsForCoord(coord) {
       const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
       return tb - ta;
     });
-    if (state.selectedCoord === coord) {
+    if (state.currentTopicId === targetTopicId && state.selectedCoord === coord) {
       state.comments = list;
     }
   } catch (err) {
@@ -426,8 +600,36 @@ async function loadCommentsForCoord(coord) {
   }
 }
 
+async function switchTopic(topicId) {
+  if (!findTopic(topicId)) return;
+
+  state.currentTopicId = topicId;
+  state.history = [];
+  state.query = "";
+  els.searchInput.value = "";
+  state.comments = [];
+
+  if (state.detailOpen) {
+    state.detailOpen = false;
+    state.pushedDetailHistory = false;
+    applyDetailBodyClass();
+  }
+
+  await Promise.all([loadStages(), loadArguments()]);
+
+  state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
+  const firstInStage =
+    state.stage !== "all"
+      ? state.arguments.find((a) => a.stage === state.stage) || state.arguments[0]
+      : state.arguments[0];
+  state.selectedCoord = firstInStage ? firstInStage.coord : "";
+
+  renderAll();
+  await loadCommentsForCoord(state.selectedCoord);
+}
+
 async function seedInitialDataToFirestore() {
-  if (!db || !state.isAdmin) return;
+  if (!db || !state.isAdmin || !isLegacyTopic()) return;
   const defaultStages = getDefaultStagesList();
   if (
     !confirm(
@@ -440,26 +642,26 @@ async function seedInitialDataToFirestore() {
   els.seedDbBtn.disabled = true;
   els.seedDbBtn.textContent = "投入中...";
   try {
+    await ensureTopicsSeededInDb();
     for (const st of defaultStages) {
-      await setDoc(doc(db, "stages", st.id), {
+      await setDoc(stageDoc(st.id), {
         ...st,
         updatedAt: serverTimestamp()
       });
     }
     for (const raw of DEFAULT_ARGUMENTS) {
       const item = normalizeArg(raw);
-      await setDoc(doc(db, "arguments", item.coord), {
+      await setDoc(argumentDoc(item.coord), {
         ...item,
         updatedAt: serverTimestamp()
       });
     }
-    await loadStages();
-    await loadArguments();
+    await Promise.all([loadTopics(), loadStages(), loadArguments()]);
     renderAll();
-    alert("初期データ（主張段階・論証）の投入が完了しました。");
+    alert("初期データ（論題・主張段階・論証）の投入が完了しました。");
   } catch (err) {
     console.error(err);
-    alert("投入に失敗しました。Firestoreのルール（stages / arguments）と管理者UIDを確認してください。");
+    alert("投入に失敗しました。Firestoreのルールと管理者UIDを確認してください。");
   } finally {
     els.seedDbBtn.disabled = false;
     els.seedDbBtn.textContent = "初期データをDBへ投入";
@@ -493,21 +695,40 @@ function getFilteredArguments() {
 }
 
 function populateStageSelect(selectedId) {
+  if (state.stages.length === 0) {
+    els.argStage.innerHTML = `<option value="">（先に「+ 段階を新規追加」してください）</option>`;
+    return;
+  }
   els.argStage.innerHTML = state.stages
     .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`)
     .join("");
   if (selectedId && findStage(selectedId)) {
     els.argStage.value = String(selectedId);
-  } else if (state.stages.length > 0) {
+  } else {
     els.argStage.value = state.stages[0].id;
   }
 }
 
+function renderTopicBar() {
+  const topic = getCurrentTopic();
+  els.topicSelect.innerHTML = state.topics
+    .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.title)}</option>`)
+    .join("");
+  els.topicSelect.value = topic.id;
+
+  els.siteTitle.textContent = topic.title;
+  els.siteSubtitle.textContent = topic.subtitle;
+  els.siteSubtitle.hidden = !topic.subtitle;
+  document.title = topic.title;
+}
+
 function renderAdminBar() {
   els.adminBadge.hidden = !state.isAdmin;
+  els.editTopicBtn.hidden = !state.isAdmin;
+  els.addTopicBtn.hidden = !state.isAdmin;
   els.addStageBtn.hidden = !state.isAdmin;
   els.addArgBtn.hidden = !state.isAdmin;
-  els.seedDbBtn.hidden = !state.isAdmin;
+  els.seedDbBtn.hidden = !(state.isAdmin && isLegacyTopic());
   els.logoutBtn.hidden = !state.isAdmin;
   els.loginOpenBtn.hidden = state.isAdmin || !isFirebaseConfigured;
 }
@@ -531,8 +752,13 @@ function renderTabs() {
 }
 
 function renderModeButtons() {
+  const topic = getCurrentTopic();
   els.modeButtons.forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.mode === state.mode);
+    const mode = btn.dataset.mode;
+    if (mode === "plus") btn.textContent = `+ ${topic.plusLabel}`;
+    if (mode === "minus") btn.textContent = `- ${topic.minusLabel}`;
+    if (mode === "split") btn.textContent = "⇄ 並置比較";
+    btn.classList.toggle("is-active", mode === state.mode);
   });
   els.backBtn.disabled = state.history.length === 0;
 }
@@ -548,6 +774,7 @@ function renderStageBanner() {
     return;
   }
 
+  const topic = getCurrentTopic();
   const editBtnHtml = state.isAdmin
     ? `<button type="button" class="banner-edit-btn js-edit-stage" data-stage-id="${escapeHtml(info.id)}">この段階を編集</button>`
     : "";
@@ -555,14 +782,14 @@ function renderStageBanner() {
   const boxesHtml = `
     <div class="banner-box is-plus">
       <div class="banner-head-row">
-        <span class="banner-label">肯定側の基本主張</span>
+        <span class="banner-label">${escapeHtml(topic.plusLabel)}の基本主張</span>
         ${editBtnHtml}
       </div>
       <div>${escapeHtml(info.plus)}</div>
     </div>
     <div class="banner-box is-minus">
       <div class="banner-head-row">
-        <span class="banner-label">反論側の基本主張</span>
+        <span class="banner-label">${escapeHtml(topic.minusLabel)}の基本主張</span>
       </div>
       <div>${escapeHtml(info.minus)}</div>
     </div>
@@ -595,10 +822,18 @@ function renderRefChips(refs, label) {
 function renderList() {
   const filtered = getFilteredArguments();
   if (filtered.length === 0) {
-    const emptyHint =
-      state.isAdmin && !state.query
-        ? `この主張段階にはまだ論証がありません。右上の「+ 新規論証を追加」から追加できます。`
-        : `条件に一致する論証がありません。`;
+    let emptyHint = "条件に一致する論証がありません。";
+    if (!state.query) {
+      if (state.stages.length === 0) {
+        emptyHint = state.isAdmin
+          ? "この論題にはまだ主張段階がありません。上部の「+ 主張段階を追加」から最初の段階（例：1）を作成してください。"
+          : "この論題にはまだ論証が登録されていません。";
+      } else {
+        emptyHint = state.isAdmin
+          ? "この主張段階にはまだ論証がありません。上部の「+ 新規論証を追加」から追加できます。"
+          : "この主張段階にはまだ論証が登録されていません。";
+      }
+    }
     els.argList.innerHTML = `<div class="empty-state">${emptyHint}</div>`;
     return;
   }
@@ -611,8 +846,8 @@ function renderList() {
   }
 
   let html = "";
-  for (const [topic, items] of groups.entries()) {
-    html += `<div class="topic-group"><h3 class="topic-heading">${escapeHtml(topic)}</h3>`;
+  for (const [topicHeading, items] of groups.entries()) {
+    html += `<div class="topic-group"><h3 class="topic-heading">${escapeHtml(topicHeading)}</h3>`;
 
     for (const item of items) {
       const selectedClass = item.coord === state.selectedCoord ? "is-selected" : "";
@@ -721,9 +956,9 @@ function renderBibliographySection(item) {
   const adminFormHtml = state.isAdmin
     ? `
       <form id="bib-add-form" class="mini-form">
-        <input type="text" id="bib-citation" required placeholder="書誌情報（例：D. Benatar, Better Never to Have Been, 2006）" />
+        <input type="text" id="bib-citation" required placeholder="書誌情報（例：著者名『書名』出版年）" />
         <input type="url" id="bib-url" placeholder="参照URL（任意・https://...）" />
-        <input type="text" id="bib-note" placeholder="関連箇所・メモ（任意・例：第2章の非対称性論証）" />
+        <input type="text" id="bib-note" placeholder="関連箇所・メモ（任意）" />
         <button type="submit" class="btn-primary">参考文献を追加</button>
       </form>`
     : "";
@@ -741,6 +976,7 @@ function renderBibliographySection(item) {
 }
 
 function renderCommentsSection(item) {
+  const topic = getCurrentTopic();
   const stanceLabelMap = {
     both: { text: "座標全体", cls: "is-both" },
     plus: { text: `+${item.coord} へ`, cls: "is-plus" },
@@ -785,8 +1021,8 @@ function renderCommentsSection(item) {
           <input type="text" id="comment-author" maxlength="40" placeholder="お名前（空欄で匿名）" />
           <select id="comment-stance">
             <option value="both">座標 ${escapeHtml(item.coord)} 全体へのコメント</option>
-            <option value="plus">+${escapeHtml(item.coord)}（肯定側）へのコメント</option>
-            <option value="minus">-${escapeHtml(item.coord)}（反論側）へのコメント</option>
+            <option value="plus">+${escapeHtml(item.coord)}（${escapeHtml(topic.plusLabel)}）へのコメント</option>
+            <option value="minus">-${escapeHtml(item.coord)}（${escapeHtml(topic.minusLabel)}）へのコメント</option>
           </select>
         </div>
         <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="この論点に対する補足・反論・疑問などを記入（最大1000文字）"></textarea>
@@ -809,10 +1045,11 @@ function renderCommentsSection(item) {
 function renderComparePanel() {
   const item = findArg(state.selectedCoord) || state.arguments[0];
   if (!item) {
-    els.comparePanel.innerHTML = `<p class="empty-muted">表示する論証がありません。</p>`;
+    els.comparePanel.innerHTML = `<p class="empty-muted">この論題にはまだ表示する論証がありません。</p>`;
     return;
   }
 
+  const topic = getCurrentTopic();
   const backRefs = referencedByMap.get(item.coord) || [];
   const listForPager = getFilteredArguments();
   const currentIdx = listForPager.findIndex((a) => a.coord === item.coord);
@@ -853,7 +1090,7 @@ function renderComparePanel() {
 
       <div class="compare-box is-plus">
         <div class="compare-box-head">
-          <span class="coord-badge is-plus">+${escapeHtml(item.coord)} 肯定側</span>
+          <span class="coord-badge is-plus">+${escapeHtml(item.coord)} ${escapeHtml(topic.plusLabel)}</span>
           <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">一覧で表示</button>
         </div>
         <h3>${escapeHtml(item.plusTitle)}</h3>
@@ -862,7 +1099,7 @@ function renderComparePanel() {
 
       <div class="compare-box is-minus">
         <div class="compare-box-head">
-          <span class="coord-badge is-minus">-${escapeHtml(item.coord)} 反論側</span>
+          <span class="coord-badge is-minus">-${escapeHtml(item.coord)} ${escapeHtml(topic.minusLabel)}</span>
           <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">一覧で表示</button>
         </div>
         <h3>${escapeHtml(item.minusTitle)}</h3>
@@ -894,6 +1131,7 @@ function renderComparePanel() {
 
 function renderAll() {
   applyDetailBodyClass();
+  renderTopicBar();
   renderAdminBar();
   renderTabs();
   renderModeButtons();
@@ -979,8 +1217,38 @@ function goBack() {
 }
 
 // === 8. 管理者モーダル操作 ===
+function openTopicDialog(topicId = null) {
+  els.topicError.hidden = true;
+  state.editingTopicId = topicId;
+
+  if (topicId) {
+    const info = findTopic(topicId);
+    if (!info) return;
+    els.topicDialogTitle.textContent = "現在の論題を編集";
+    els.topicId.value = info.id;
+    els.topicId.readOnly = true;
+    els.topicTitle.value = info.title;
+    els.topicSubtitle.value = info.subtitle;
+    els.topicPlusLabel.value = info.plusLabel;
+    els.topicMinusLabel.value = info.minusLabel;
+    els.topicDeleteBtn.hidden = false;
+  } else {
+    els.topicDialogTitle.textContent = "新しい論題を追加";
+    els.topicForm.reset();
+    els.topicId.readOnly = false;
+    els.topicPlusLabel.value = "肯定側";
+    els.topicMinusLabel.value = "反論側";
+    els.topicDeleteBtn.hidden = true;
+  }
+
+  els.topicDialog.showModal();
+}
+
 function openArgDialog(coord = null) {
+  const topic = getCurrentTopic();
   els.argError.hidden = true;
+  els.argPlusHeading.textContent = `${topic.plusLabel} (+)`;
+  els.argMinusHeading.textContent = `${topic.minusLabel} (-)`;
   state.editingCoord = coord;
 
   if (coord) {
@@ -998,7 +1266,7 @@ function openArgDialog(coord = null) {
     els.argRefs.value = item.refs.join(", ");
     els.argDeleteBtn.hidden = false;
   } else {
-    const defaultStage = state.stage === "all" ? state.stages[0]?.id || "1" : state.stage;
+    const defaultStage = state.stage === "all" ? state.stages[0]?.id || "" : state.stage;
     els.argDialogTitle.textContent = "新しい座標の論証を追加";
     els.argForm.reset();
     populateStageSelect(defaultStage);
@@ -1017,7 +1285,10 @@ function suggestNextStageId() {
 }
 
 function openStageDialog(stageId = null) {
+  const topic = getCurrentTopic();
   els.stageError.hidden = true;
+  els.stagePlusLabelText.textContent = `${topic.plusLabel}の基本主張 (+N)`;
+  els.stageMinusLabelText.textContent = `${topic.minusLabel}の基本主張 (-N)`;
   state.editingStageId = stageId;
 
   if (stageId) {
@@ -1037,8 +1308,8 @@ function openStageDialog(stageId = null) {
     els.stageId.readOnly = false;
     els.stageId.value = nextId;
     els.stageLabel.placeholder = `${nextId}. 新しい主張段階の名称`;
-    els.stagePlus.placeholder = `(+${nextId}) 肯定側の基本主張を記入`;
-    els.stageMinus.placeholder = `(-${nextId}) 反論側の基本主張を記入`;
+    els.stagePlus.placeholder = `(+${nextId}) ${topic.plusLabel}の基本主張を記入`;
+    els.stageMinus.placeholder = `(-${nextId}) ${topic.minusLabel}の基本主張を記入`;
     els.stageDeleteBtn.hidden = true;
   }
 
@@ -1046,7 +1317,6 @@ function openStageDialog(stageId = null) {
 }
 
 // === 9. イベント登録 ===
-// スマホの「戻る」ボタン（スワイプバック）で詳細ページから一覧へ戻る
 window.addEventListener("popstate", () => {
   if (state.detailOpen) {
     closeDetailView({ restoreScroll: true });
@@ -1058,6 +1328,13 @@ document.querySelectorAll(".js-close-dialog").forEach((btn) => {
     btn.closest("dialog")?.close();
   });
 });
+
+els.topicSelect.addEventListener("change", (e) => {
+  switchTopic(e.target.value);
+});
+
+els.editTopicBtn.addEventListener("click", () => openTopicDialog(state.currentTopicId));
+els.addTopicBtn.addEventListener("click", () => openTopicDialog(null));
 
 els.loginOpenBtn.addEventListener("click", () => {
   els.loginError.hidden = true;
@@ -1089,6 +1366,98 @@ els.inlineAddStageBtn.addEventListener("click", () => openStageDialog(null));
 els.addArgBtn.addEventListener("click", () => openArgDialog(null));
 els.seedDbBtn.addEventListener("click", seedInitialDataToFirestore);
 
+// 論題の保存
+els.topicForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!db || !state.isAdmin) return;
+
+  const id = els.topicId.value.trim();
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    els.topicError.textContent = "論題IDには半角英数字・ハイフン（-）・アンダースコア（_）のみ使えます。";
+    els.topicError.hidden = false;
+    return;
+  }
+
+  const isCreating = !state.editingTopicId;
+  if (isCreating && findTopic(id)) {
+    els.topicError.textContent = `論題ID「${id}」はすでに使われています。別のIDを指定してください。`;
+    els.topicError.hidden = false;
+    return;
+  }
+
+  const existing = findTopic(id);
+  const maxOrder = state.topics.reduce((m, t) => Math.max(m, t.order || 0), 0);
+
+  const payload = {
+    id,
+    title: els.topicTitle.value.trim(),
+    subtitle: els.topicSubtitle.value.trim(),
+    plusLabel: els.topicPlusLabel.value.trim() || "肯定側",
+    minusLabel: els.topicMinusLabel.value.trim() || "反論側",
+    order: existing ? existing.order : maxOrder + 1,
+    useLegacyRoot: existing ? existing.useLegacyRoot : false,
+    updatedAt: serverTimestamp()
+  };
+
+  try {
+    await ensureTopicsSeededInDb();
+    await setDoc(doc(db, "topics", id), payload);
+    els.topicDialog.close();
+    await loadTopics();
+
+    if (isCreating) {
+      await switchTopic(id);
+    } else {
+      renderAll();
+    }
+  } catch (err) {
+    console.error(err);
+    els.topicError.textContent = "保存に失敗しました。Firestoreのルール（topics）を確認してください。";
+    els.topicError.hidden = false;
+  }
+});
+
+// 論題の削除
+els.topicDeleteBtn.addEventListener("click", async () => {
+  if (!db || !state.isAdmin || !state.editingTopicId) return;
+  const targetId = state.editingTopicId;
+
+  if (state.topics.length <= 1) {
+    els.topicError.textContent = "最後の1件の論題は削除できません。";
+    els.topicError.hidden = false;
+    return;
+  }
+
+  if (state.arguments.length > 0) {
+    els.topicError.textContent = `この論題には ${state.arguments.length} 件の論証が残っています。誤削除を防ぐため、先に論証を削除してください。`;
+    els.topicError.hidden = false;
+    return;
+  }
+
+  if (!confirm(`論題「${findTopic(targetId)?.title || targetId}」を削除しますか？この操作は元に戻せません。`)) {
+    return;
+  }
+
+  try {
+    await ensureTopicsSeededInDb();
+    // 新規論題に空の主張段階が残っていれば一緒に削除する
+    if (!isLegacyTopic(targetId)) {
+      for (const st of state.stages) {
+        await deleteDoc(stageDoc(st.id, targetId));
+      }
+    }
+    await deleteDoc(doc(db, "topics", targetId));
+    els.topicDialog.close();
+    await loadTopics();
+    const nextTopicId = state.topics[0]?.id || DEFAULT_TOPIC.id;
+    await switchTopic(nextTopicId);
+  } catch (err) {
+    console.error(err);
+    els.topicError.textContent = "削除に失敗しました。";
+    els.topicError.hidden = false;
+  }
+});
+
 // 主張段階の保存
 els.stageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1117,7 +1486,7 @@ els.stageForm.addEventListener("submit", async (e) => {
 
   try {
     await ensureStagesSeededInDb();
-    await setDoc(doc(db, "stages", id), payload);
+    await setDoc(stageDoc(id), payload);
     els.stageDialog.close();
     await loadStages();
 
@@ -1150,7 +1519,7 @@ els.stageDeleteBtn.addEventListener("click", async () => {
 
   try {
     await ensureStagesSeededInDb();
-    await deleteDoc(doc(db, "stages", targetId));
+    await deleteDoc(stageDoc(targetId));
     els.stageDialog.close();
     await loadStages();
     if (state.stage === targetId) {
@@ -1170,6 +1539,14 @@ els.argForm.addEventListener("submit", async (e) => {
   if (!db || !state.isAdmin) return;
 
   const coord = els.argCoord.value.trim();
+  const stageVal = String(els.argStage.value).trim();
+
+  if (!stageVal) {
+    els.argError.textContent = "先に「+ 段階を新規追加」から主張段階を1つ作成してください。";
+    els.argError.hidden = false;
+    return;
+  }
+
   if (!coord || coord.includes("/")) {
     els.argError.textContent = "座標にスラッシュ（/）は使えません。";
     els.argError.hidden = false;
@@ -1190,7 +1567,7 @@ els.argForm.addEventListener("submit", async (e) => {
 
   const payload = {
     coord,
-    stage: String(els.argStage.value).trim(),
+    stage: stageVal,
     topic: els.argTopic.value.trim(),
     plusTitle: els.argPlusTitle.value.trim(),
     plusBody: els.argPlusBody.value.trim(),
@@ -1202,7 +1579,7 @@ els.argForm.addEventListener("submit", async (e) => {
   };
 
   try {
-    await setDoc(doc(db, "arguments", coord), payload);
+    await setDoc(argumentDoc(coord), payload);
     els.argDialog.close();
     await loadArguments();
     state.stage = payload.stage;
@@ -1224,7 +1601,7 @@ els.argDeleteBtn.addEventListener("click", async () => {
   if (!confirm(`座標 ${target} の論証を削除しますか？この操作は元に戻せません。`)) return;
 
   try {
-    await deleteDoc(doc(db, "arguments", target));
+    await deleteDoc(argumentDoc(target));
     els.argDialog.close();
     await loadArguments();
     state.selectedCoord = state.arguments[0]?.coord || "";
@@ -1358,7 +1735,7 @@ els.comparePanel.addEventListener("click", async (e) => {
     const idx = Number(delBibBtn.dataset.index);
     const nextBib = item.bibliography.filter((_, i) => i !== idx);
     try {
-      await setDoc(doc(db, "arguments", item.coord), {
+      await setDoc(argumentDoc(item.coord), {
         ...item,
         bibliography: nextBib,
         updatedAt: serverTimestamp()
@@ -1377,7 +1754,7 @@ els.comparePanel.addEventListener("click", async (e) => {
   if (delCommentBtn && db && state.isAdmin) {
     if (!confirm("このコメントを削除しますか？")) return;
     try {
-      await deleteDoc(doc(db, "comments", delCommentBtn.dataset.id));
+      await deleteDoc(commentDoc(delCommentBtn.dataset.id));
       await loadCommentsForCoord(state.selectedCoord);
     } catch (err) {
       console.error(err);
@@ -1400,7 +1777,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
 
     const nextBib = [...item.bibliography, { citation, url, note }];
     try {
-      await setDoc(doc(db, "arguments", item.coord), {
+      await setDoc(argumentDoc(item.coord), {
         ...item,
         bibliography: nextBib,
         updatedAt: serverTimestamp()
@@ -1417,7 +1794,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
 
   if (e.target.id === "comment-add-form") {
     e.preventDefault();
-    if (!db) return;
+    if (!db || !state.selectedCoord) return;
 
     const authorInput = document.getElementById("comment-author");
     const stanceInput = document.getElementById("comment-stance");
@@ -1431,7 +1808,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
     submitBtn.textContent = "送信中...";
 
     try {
-      await addDoc(collection(db, "comments"), {
+      await addDoc(commentsCollection(), {
         coord: state.selectedCoord,
         stance: stanceInput.value,
         author: authorInput.value.trim() || "匿名",
@@ -1462,17 +1839,22 @@ async function init() {
     });
   }
 
-  await Promise.all([loadStages(), loadArguments()]);
-  if (state.stage !== "all" && !findStage(state.stage) && state.stages.length > 0) {
-    state.stage = state.stages[0].id;
-  }
-  if (!findArg(state.selectedCoord) && state.arguments.length > 0) {
-    state.selectedCoord = state.arguments[0].coord;
+  await loadTopics();
+
+  const { topicId, coordToken } = parseUrlHashTokens();
+  if (topicId && findTopic(topicId)) {
+    state.currentTopicId = topicId;
+  } else {
+    state.currentTopicId = state.topics[0]?.id || DEFAULT_TOPIC.id;
   }
 
-  const hasInitialHash = parseInitialHash();
-  // スマホで共有リンク（例：#-1.21）を直接開いた場合は、そのまま専用詳細ページを表示する
-  if (hasInitialHash && isMobileViewport()) {
+  await Promise.all([loadStages(), loadArguments()]);
+
+  state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
+  state.selectedCoord = state.arguments[0]?.coord || "";
+
+  const matchedCoord = applyCoordToken(coordToken);
+  if (matchedCoord && isMobileViewport()) {
     state.detailOpen = true;
   }
 

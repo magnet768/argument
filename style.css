@@ -1182,3 +1182,69 @@ body.is-detail-view .detail-pager {
     padding: 14px;
   }
 }
+
+/* === 論題切替バー === */
+.topic-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 12px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.topic-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.topic-select-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.topic-select {
+  flex: 1 1 auto;
+  max-width: 440px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.topic-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.compare-panel {
+  top: 196px;
+  max-height: calc(100vh - 214px);
+}
+
+@media (max-width: 980px) {
+  .topic-bar {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+
+  .topic-select {
+    max-width: none;
+    font-size: 16px; /* iOS Safariの自動ズーム防止 */
+  }
+}
