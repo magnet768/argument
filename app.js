@@ -9,6 +9,7 @@ import {
   getFirestore,
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   deleteDoc,
@@ -33,6 +34,15 @@ const DEFAULT_TOPIC = {
   useLegacyRoot: true
 };
 
+const DEFAULT_PROFILE = {
+  name: "",
+  role: "",
+  bio: "",
+  interests: [],
+  links: [],
+  contact: ""
+};
+
 // === 1. Firebase 初期化 ===
 const isFirebaseConfigured =
   firebaseConfig &&
@@ -50,6 +60,8 @@ if (isFirebaseConfigured) {
 
 // === 2. アプリケーション状態 ===
 const state = {
+  page: "explorer",       // "explorer" | "guide" | "profile"
+  profile: { ...DEFAULT_PROFILE },
   topics: [],
   topicsInDb: false,
   currentTopicId: DEFAULT_TOPIC.id,
@@ -76,6 +88,13 @@ let referencedByMap = new Map();
 
 // DOM 参照
 const els = {
+  pageNavButtons: document.querySelectorAll(".page-nav-btn"),
+  explorerHeaderPanel: document.getElementById("explorer-header-panel"),
+  explorerView: document.getElementById("explorer-view"),
+  guideView: document.getElementById("guide-view"),
+  profileView: document.getElementById("profile-view"),
+  profileContent: document.getElementById("profile-content"),
+
   topicSelect: document.getElementById("topic-select"),
   editTopicBtn: document.getElementById("edit-topic-btn"),
   addTopicBtn: document.getElementById("add-topic-btn"),
@@ -103,6 +122,16 @@ const els = {
   loginEmail: document.getElementById("login-email"),
   loginPassword: document.getElementById("login-password"),
   loginError: document.getElementById("login-error"),
+
+  profileDialog: document.getElementById("profile-dialog"),
+  profileForm: document.getElementById("profile-form"),
+  profileName: document.getElementById("profile-name"),
+  profileRole: document.getElementById("profile-role"),
+  profileBio: document.getElementById("profile-bio"),
+  profileInterests: document.getElementById("profile-interests"),
+  profileLinks: document.getElementById("profile-links"),
+  profileContact: document.getElementById("profile-contact"),
+  profileError: document.getElementById("profile-error"),
 
   topicDialog: document.getElementById("topic-dialog"),
   topicDialogTitle: document.getElementById("topic-dialog-title"),
@@ -168,6 +197,21 @@ function compareNatural(a, b) {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
+function normalizeProfile(raw = {}) {
+  return {
+    name: String(raw.name ?? "").trim(),
+    role: String(raw.role ?? "").trim(),
+    bio: String(raw.bio ?? "").trim(),
+    interests: Array.isArray(raw.interests) ? raw.interests.filter(Boolean) : [],
+    links: Array.isArray(raw.links)
+      ? raw.links
+          .filter((l) => l && safeUrl(l.url))
+          .map((l) => ({ label: String(l.label ?? l.url).trim(), url: safeUrl(l.url) }))
+      : [],
+    contact: String(raw.contact ?? "").trim()
+  };
+}
+
 function normalizeTopic(raw) {
   const id = String(raw.id).trim();
   return {
@@ -226,7 +270,6 @@ function isLegacyTopic(topicId = state.currentTopicId) {
   return Boolean(t ? t.useLegacyRoot : topicId === DEFAULT_TOPIC.id);
 }
 
-// 既存データ（初期の反出生主義論題）はルート領域、新規論題は topics/{id} 配下を使用
 function stagesCollection(topicId = state.currentTopicId) {
   return isLegacyTopic(topicId)
     ? collection(db, "stages")
@@ -309,6 +352,9 @@ function formatDate(ts) {
 }
 
 function getCurrentHash() {
+  if (state.page === "guide") return "#guide";
+  if (state.page === "profile") return "#profile";
+
   const topicId = state.currentTopicId;
   if (!topicId) return "";
   if (!state.selectedCoord) {
@@ -328,21 +374,23 @@ function syncUrlHash() {
   }
 }
 
-// URLハッシュを「論題ID」と「座標トークン」に分解（旧形式 #+1.10 も互換維持）
 function parseUrlHashTokens() {
   const raw = decodeURIComponent(window.location.hash.replace(/^#/, "")).trim();
-  if (!raw) return { topicId: null, coordToken: "" };
+  if (!raw) return { page: "explorer", topicId: null, coordToken: "" };
+
+  if (raw === "guide") return { page: "guide", topicId: null, coordToken: "" };
+  if (raw === "profile") return { page: "profile", topicId: null, coordToken: "" };
 
   if (raw.includes("/")) {
     const [maybeTopic, ...rest] = raw.split("/");
-    return { topicId: maybeTopic.trim(), coordToken: rest.join("/").trim() };
+    return { page: "explorer", topicId: maybeTopic.trim(), coordToken: rest.join("/").trim() };
   }
 
   if (findTopic(raw)) {
-    return { topicId: raw, coordToken: "" };
+    return { page: "explorer", topicId: raw, coordToken: "" };
   }
 
-  return { topicId: null, coordToken: raw };
+  return { page: "explorer", topicId: null, coordToken: raw };
 }
 
 function applyCoordToken(coordToken) {
@@ -368,7 +416,7 @@ function applyCoordToken(coordToken) {
 }
 
 function focusCard(coord) {
-  if (state.detailOpen) return;
+  if (state.detailOpen || state.page !== "explorer") return;
   requestAnimationFrame(() => {
     const card = els.argList.querySelector(`[data-coord="${CSS.escape(coord)}"]`);
     if (!card) return;
@@ -379,9 +427,21 @@ function focusCard(coord) {
   });
 }
 
-// === 4. 専用詳細ページの開閉 ===
+// === 4. ページ切替と専用詳細ページの開閉 ===
 function applyDetailBodyClass() {
-  document.body.classList.toggle("is-detail-view", state.detailOpen);
+  const activeDetail = state.page === "explorer" && state.detailOpen;
+  document.body.classList.toggle("is-detail-view", activeDetail);
+}
+
+function switchPage(nextPage) {
+  if (!["explorer", "guide", "profile"].includes(nextPage)) return;
+  state.page = nextPage;
+  if (nextPage !== "explorer" && state.detailOpen) {
+    state.detailOpen = false;
+    state.pushedDetailHistory = false;
+  }
+  renderAll();
+  window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 function openDetailView(coord, { pushBrowserHistory = true } = {}) {
@@ -394,6 +454,7 @@ function openDetailView(coord, { pushBrowserHistory = true } = {}) {
   }
 
   const coordChanged = state.selectedCoord !== coord;
+  state.page = "explorer";
   state.selectedCoord = coord;
   state.detailOpen = true;
   applyDetailBodyClass();
@@ -440,6 +501,24 @@ function requestCloseDetailView() {
 }
 
 // === 5. Firestore データ操作 ===
+async function loadProfile() {
+  if (!db) {
+    state.profile = { ...DEFAULT_PROFILE };
+    return;
+  }
+  try {
+    const snap = await getDoc(doc(db, "siteMeta", "profile"));
+    if (snap.exists()) {
+      state.profile = normalizeProfile(snap.data());
+    } else {
+      state.profile = { ...DEFAULT_PROFILE };
+    }
+  } catch (err) {
+    console.error(err);
+    state.profile = { ...DEFAULT_PROFILE };
+  }
+}
+
 async function loadTopics() {
   if (!db) {
     state.topics = [normalizeTopic(DEFAULT_TOPIC)];
@@ -709,6 +788,128 @@ function populateStageSelect(selectedId) {
   }
 }
 
+function renderPageVisibility() {
+  const isExplorer = state.page === "explorer";
+  const isGuide = state.page === "guide";
+  const isProfile = state.page === "profile";
+
+  els.pageNavButtons.forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.page === state.page);
+  });
+
+  els.explorerHeaderPanel.hidden = !isExplorer;
+  els.explorerView.hidden = !isExplorer;
+  els.guideView.hidden = !isGuide;
+  els.profileView.hidden = !isProfile;
+
+  const topic = getCurrentTopic();
+  if (isGuide) {
+    document.title = `使い方 | ${topic.title}`;
+  } else if (isProfile) {
+    document.title = `プロフィール | ${topic.title}`;
+  } else {
+    document.title = topic.title;
+  }
+}
+
+function renderProfilePage() {
+  const p = state.profile;
+  const hasContent = Boolean(
+    p.name || p.role || p.bio || p.interests.length > 0 || p.links.length > 0 || p.contact
+  );
+
+  const editBtnHtml = state.isAdmin
+    ? `<button type="button" class="admin-action-btn js-open-profile-edit">プロフィールを編集</button>`
+    : "";
+
+  if (!hasContent) {
+    els.profileContent.innerHTML = `
+      <header class="doc-header">
+        <div class="doc-header-row">
+          <div>
+            <h2>管理者プロフィール</h2>
+            <p class="doc-lead">このサイトの運営者情報</p>
+          </div>
+          ${editBtnHtml}
+        </div>
+      </header>
+      <div class="empty-state">
+        ${
+          state.isAdmin
+            ? "プロフィールはまだ登録されていません。右上の「プロフィールを編集」から作成できます。"
+            : "管理者のプロフィールはまだ登録されていません。"
+        }
+      </div>
+      <div class="doc-footer-actions">
+        <button type="button" class="btn-primary js-go-explorer">← 論証一覧へ戻る</button>
+      </div>
+    `;
+    return;
+  }
+
+  const interestsHtml =
+    p.interests.length > 0
+      ? `
+        <section class="doc-section">
+          <h3>関心領域・テーマ</h3>
+          <div class="interest-tags">
+            ${p.interests.map((tag) => `<span class="interest-tag">${escapeHtml(tag)}</span>`).join("")}
+          </div>
+        </section>`
+      : "";
+
+  const linksHtml =
+    p.links.length > 0
+      ? `
+        <section class="doc-section">
+          <h3>外部リンク</h3>
+          <ul class="profile-links">
+            ${p.links
+              .map(
+                (l) => `
+                <li class="profile-link-item">
+                  <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)} ↗</a>
+                </li>`
+              )
+              .join("")}
+          </ul>
+        </section>`
+      : "";
+
+  const contactHtml = p.contact
+    ? `
+      <section class="doc-section">
+        <h3>連絡先・メモ</h3>
+        <p class="profile-bio">${escapeHtml(p.contact)}</p>
+      </section>`
+    : "";
+
+  els.profileContent.innerHTML = `
+    <header class="doc-header">
+      <div class="doc-header-row">
+        <div>
+          <h2>${escapeHtml(p.name || "管理者プロフィール")}</h2>
+          ${p.role ? `<p class="profile-role">${escapeHtml(p.role)}</p>` : ""}
+        </div>
+        ${editBtnHtml}
+      </div>
+    </header>
+
+    ${
+      p.bio
+        ? `<section class="doc-section"><h3>自己紹介</h3><p class="profile-bio">${escapeHtml(p.bio)}</p></section>`
+        : ""
+    }
+    ${interestsHtml}
+    ${linksHtml}
+    ${contactHtml}
+
+    <div class="doc-footer-actions">
+      <button type="button" class="btn-primary js-go-explorer">← 論証一覧へ戻る</button>
+    </div>
+  `;
+}
+
 function renderTopicBar() {
   const topic = getCurrentTopic();
   els.topicSelect.innerHTML = state.topics
@@ -719,7 +920,6 @@ function renderTopicBar() {
   els.siteTitle.textContent = topic.title;
   els.siteSubtitle.textContent = topic.subtitle;
   els.siteSubtitle.hidden = !topic.subtitle;
-  document.title = topic.title;
 }
 
 function renderAdminBar() {
@@ -855,6 +1055,7 @@ function renderList() {
         item.bibliography.length > 0
           ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>`
           : "";
+      const refsHtml = renderRefChips(item.refs, "前提論証");
 
       if (state.mode === "split") {
         html += `
@@ -881,10 +1082,7 @@ function renderList() {
                 <div>${escapeHtml(item.minusBody)}</div>
               </div>
             </div>
-            <div class="card-footer-row">
-              ${renderRefChips(item.refs, "前提")}
-              <span class="card-detail-hint">詳細・文献・コメント ›</span>
-            </div>
+            ${refsHtml}
           </article>
         `;
       } else {
@@ -911,10 +1109,7 @@ function renderList() {
               >⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button>
             </div>
             <p class="card-body">${escapeHtml(body)}</p>
-            <div class="card-footer-row">
-              ${renderRefChips(item.refs, "前提")}
-              <span class="card-detail-hint">詳細・比較・コメント ›</span>
-            </div>
+            ${refsHtml}
           </article>
         `;
       }
@@ -1131,6 +1326,7 @@ function renderComparePanel() {
 
 function renderAll() {
   applyDetailBodyClass();
+  renderPageVisibility();
   renderTopicBar();
   renderAdminBar();
   renderTabs();
@@ -1138,6 +1334,7 @@ function renderAll() {
   renderStageBanner();
   renderList();
   renderComparePanel();
+  renderProfilePage();
   syncUrlHash();
 }
 
@@ -1217,6 +1414,20 @@ function goBack() {
 }
 
 // === 8. 管理者モーダル操作 ===
+function openProfileDialog() {
+  const p = state.profile;
+  els.profileError.hidden = true;
+  els.profileName.value = p.name;
+  els.profileRole.value = p.role;
+  els.profileBio.value = p.bio;
+  els.profileInterests.value = p.interests.join(", ");
+  els.profileLinks.value = p.links
+    .map((l) => (l.label && l.label !== l.url ? `${l.label} | ${l.url}` : l.url))
+    .join("\n");
+  els.profileContact.value = p.contact;
+  els.profileDialog.showModal();
+}
+
 function openTopicDialog(topicId = null) {
   els.topicError.hidden = true;
   state.editingTopicId = topicId;
@@ -1323,6 +1534,22 @@ window.addEventListener("popstate", () => {
   }
 });
 
+els.pageNavButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    switchPage(btn.dataset.page);
+  });
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".js-go-explorer")) {
+    switchPage("explorer");
+    return;
+  }
+  if (e.target.closest(".js-open-profile-edit")) {
+    openProfileDialog();
+  }
+});
+
 document.querySelectorAll(".js-close-dialog").forEach((btn) => {
   btn.addEventListener("click", () => {
     btn.closest("dialog")?.close();
@@ -1361,6 +1588,66 @@ els.logoutBtn.addEventListener("click", async () => {
   await signOut(auth);
 });
 
+// プロフィールの保存
+els.profileForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!db || !state.isAdmin) return;
+  els.profileError.hidden = true;
+
+  const interests = els.profileInterests.value
+    .split(/[,、]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const rawLines = els.profileLinks.value
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const links = [];
+  for (const line of rawLines) {
+    if (line.includes("|")) {
+      const [labelPart, ...urlParts] = line.split("|");
+      const url = safeUrl(urlParts.join("|"));
+      if (!url) {
+        els.profileError.textContent = `外部リンクのURLが正しくありません（https:// または http:// で始めてください）：${line}`;
+        els.profileError.hidden = false;
+        return;
+      }
+      links.push({ label: labelPart.trim() || url, url });
+    } else {
+      const url = safeUrl(line);
+      if (!url) {
+        els.profileError.textContent = `外部リンクのURLが正しくありません（https:// または http:// で始めてください）：${line}`;
+        els.profileError.hidden = false;
+        return;
+      }
+      links.push({ label: url, url });
+    }
+  }
+
+  const payload = {
+    name: els.profileName.value.trim(),
+    role: els.profileRole.value.trim(),
+    bio: els.profileBio.value.trim(),
+    interests,
+    links,
+    contact: els.profileContact.value.trim(),
+    updatedAt: serverTimestamp()
+  };
+
+  try {
+    await setDoc(doc(db, "siteMeta", "profile"), payload);
+    state.profile = normalizeProfile(payload);
+    els.profileDialog.close();
+    renderProfilePage();
+  } catch (err) {
+    console.error(err);
+    els.profileError.textContent = "保存に失敗しました。Firestoreのルール（siteMeta）を確認してください。";
+    els.profileError.hidden = false;
+  }
+});
+
 els.addStageBtn.addEventListener("click", () => openStageDialog(null));
 els.inlineAddStageBtn.addEventListener("click", () => openStageDialog(null));
 els.addArgBtn.addEventListener("click", () => openArgDialog(null));
@@ -1372,8 +1659,8 @@ els.topicForm.addEventListener("submit", async (e) => {
   if (!db || !state.isAdmin) return;
 
   const id = els.topicId.value.trim();
-  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
-    els.topicError.textContent = "論題IDには半角英数字・ハイフン（-）・アンダースコア（_）のみ使えます。";
+  if (!/^[a-zA-Z0-9_-]+$/.test(id) || id === "guide" || id === "profile") {
+    els.topicError.textContent = "論題IDには半角英数字・ハイフン・アンダースコアのみ使え、「guide」「profile」は予約語のため使用できません。";
     els.topicError.hidden = false;
     return;
   }
@@ -1440,7 +1727,6 @@ els.topicDeleteBtn.addEventListener("click", async () => {
 
   try {
     await ensureTopicsSeededInDb();
-    // 新規論題に空の主張段階が残っていれば一緒に削除する
     if (!isLegacyTopic(targetId)) {
       for (const st of state.stages) {
         await deleteDoc(stageDoc(st.id, targetId));
@@ -1836,12 +2122,15 @@ async function init() {
       renderStageBanner();
       renderList();
       renderComparePanel();
+      renderProfilePage();
     });
   }
 
-  await loadTopics();
+  await Promise.all([loadProfile(), loadTopics()]);
 
-  const { topicId, coordToken } = parseUrlHashTokens();
+  const { page, topicId, coordToken } = parseUrlHashTokens();
+  state.page = page;
+
   if (topicId && findTopic(topicId)) {
     state.currentTopicId = topicId;
   } else {
@@ -1854,7 +2143,7 @@ async function init() {
   state.selectedCoord = state.arguments[0]?.coord || "";
 
   const matchedCoord = applyCoordToken(coordToken);
-  if (matchedCoord && isMobileViewport()) {
+  if (state.page === "explorer" && matchedCoord && isMobileViewport()) {
     state.detailOpen = true;
   }
 

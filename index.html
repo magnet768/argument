@@ -8,8 +8,25 @@
 </head>
 <body>
   <header class="site-header">
-    <div class="header-inner">
-      <!-- 論題切替バー -->
+    <!-- 全ページ共通のナビゲーションバー -->
+    <div class="global-nav-bar">
+      <div class="global-nav-inner">
+        <nav class="page-nav" aria-label="ページ切替">
+          <button type="button" class="page-nav-btn is-active" data-page="explorer">論証一覧</button>
+          <button type="button" class="page-nav-btn" data-page="guide">使い方</button>
+          <button type="button" class="page-nav-btn" data-page="profile">プロフィール</button>
+        </nav>
+
+        <div class="global-auth-bar">
+          <span id="admin-badge" class="admin-badge" hidden>管理者モード</span>
+          <button type="button" id="login-open-btn" class="admin-auth-btn">管理者ログイン</button>
+          <button type="button" id="logout-btn" class="admin-auth-btn" hidden>ログアウト</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 論証ページ専用の操作ヘッダー -->
+    <div id="explorer-header-panel" class="header-inner">
       <div class="topic-bar">
         <div class="topic-select-wrap">
           <label for="topic-select" class="topic-select-label">論題</label>
@@ -28,12 +45,9 @@
         </div>
 
         <div class="admin-bar">
-          <span id="admin-badge" class="admin-badge" hidden>管理者モード</span>
           <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 主張段階を追加</button>
           <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規論証を追加</button>
           <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
-          <button type="button" id="login-open-btn" class="admin-auth-btn">管理者ログイン</button>
-          <button type="button" id="logout-btn" class="admin-auth-btn" hidden>ログアウト</button>
         </div>
       </div>
 
@@ -61,7 +75,8 @@
     </div>
   </header>
 
-  <div class="container">
+  <!-- ページ1：論証エクスプローラー -->
+  <div id="explorer-view" class="container">
     <div id="status-notice" class="status-notice" hidden></div>
     <section id="stage-banner" class="stage-banner" aria-live="polite"></section>
 
@@ -69,6 +84,85 @@
       <section id="argument-list" class="argument-list" aria-label="論証一覧"></section>
       <aside id="compare-panel" class="compare-panel" aria-label="1対1対照比較・参考文献・コメント"></aside>
     </main>
+  </div>
+
+  <!-- ページ2：このサイトの使い方 -->
+  <div id="guide-view" class="container page-container" hidden>
+    <article class="doc-card">
+      <header class="doc-header">
+        <h2>このサイトの使い方</h2>
+        <p class="doc-lead">
+          このサイトは、哲学的・倫理的な論争を立場の分かれうる最小単位まで細分化し、
+          数値座標を用いて<strong>「立場ごとの通読」</strong>と<strong>「対向論証との即座の比較」</strong>を両立させるための論証エクスプローラーです。
+        </p>
+      </header>
+
+      <section class="doc-section">
+        <h3>1. 座標インデックスの読み方</h3>
+        <p>すべての論証には、極性（符号）と論理座標からなる固有のインデックスが付与されています。</p>
+        <div class="coord-anatomy">
+          <div class="anatomy-badges">
+            <span class="coord-badge is-plus">+1.21</span>
+            <span class="anatomy-arrow">⇄</span>
+            <span class="coord-badge is-minus">-1.21</span>
+          </div>
+          <ul class="doc-list">
+            <li><strong>符号（<code>+</code> / <code>-</code>）</strong>：対立する2つの立場を表します。同じ番号で符号を反転させた論証どうしが、1対1で直接対立する論点ペアになっています。</li>
+            <li><strong>整数部（<code>1</code>, <code>2</code>, ...）</strong>：上部タブに対応する「主張段階」を表します（例：理想論レベル、実践規範レベルなど）。</li>
+            <li><strong>小数第1位（<code>.1</code>, <code>.2</code>, ...）</strong>：その段階の中でのトピック群（価値論、同意、義務論など）を表します。</li>
+            <li><strong>小数第2位（<code>0</code>, <code>1</code>, <code>2</code>...）</strong>：<code>0</code> がそのトピックの基底命題、<code>1</code> 以降がさらに細分化された分岐点です。</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="doc-section">
+        <h3>2. 基本的な操作と閲覧モード</h3>
+        <div class="guide-grid">
+          <div class="guide-box">
+            <h4>論題と主張段階を切り替える</h4>
+            <p>最上部の<strong>「論題」プルダウン</strong>からテーマを選び、その下の<strong>段階タブ</strong>で読みたい階層（または「全論点」）を切り替えます。</p>
+          </div>
+          <div class="guide-box">
+            <h4>3つの表示モードを使い分ける</h4>
+            <p><strong>+ / - まとめ</strong>では一方の立場だけを筋道立てて通読できます。<strong>⇄ 並置比較</strong>に切り替えると、全論点の賛否を左右に並べて俯瞰できます。</p>
+          </div>
+          <div class="guide-box">
+            <h4>符号反転ジャンプと履歴戻り</h4>
+            <p>各カードの<strong>「⇄ 反転」ボタン</strong>を押すと、対向する立場の同一座標へ即座に移動して強調表示されます。<strong>「↩ 元の論証へ戻る」</strong>で直前の位置へ戻れます。</p>
+          </div>
+          <div class="guide-box">
+            <h4>前提・被参照リンクと検索</h4>
+            <p><strong>±1.10</strong> のようなチップを押すと、段階をまたいで前提論証や参照元の論証へ移動できます。検索欄では座標番号・本文・参考文献から絞り込めます。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="doc-section">
+        <h3>3. PCとスマートフォンでの見方</h3>
+        <ul class="doc-list">
+          <li><strong>PCで閲覧する場合</strong>：左側に論証一覧、右側に選択中座標の「1対1対照比較・参考文献・閲覧者コメント」が表示されます。各論証カードをクリックすると右側のパネルが切り替わります。右側上部の<strong>「⤢ 拡大」</strong>を押すと、その座標だけの集中画面に切り替えられます。</li>
+          <li><strong>スマートフォンで閲覧する場合</strong>：一覧画面で任意の論証カードをタップすると、その座標の<strong>専用詳細ページ</strong>へ移動します。詳細ページ右上の<strong>「💬 コメント」</strong>からコメント欄へすぐ移動でき、<strong>「← 一覧」</strong>（または端末の戻る操作）で元のスクロール位置へ戻れます。</li>
+        </ul>
+      </section>
+
+      <section class="doc-section">
+        <h3>4. 参考文献の確認・コメント投稿・URL共有</h3>
+        <ul class="doc-list">
+          <li><strong>参考文献</strong>：各座標の詳細パネル下部に、関連する書籍・論文・参照URLが整理されています。</li>
+          <li><strong>コメントの投稿</strong>：どの座標に対しても、座標全体・<code>+</code>側・<code>-</code>側のいずれかを指定して補足・反論・疑問を投稿できます（最大1000文字、空欄で匿名）。</li>
+          <li><strong>特定座標のURL共有</strong>：論証を選択するとブラウザのURL末尾に <code>#論題ID/+1.10</code> のような座標が自動付与されます。そのURLを共有すると、相手がその論証を直接開いた状態でアクセスできます。</li>
+        </ul>
+      </section>
+
+      <div class="doc-footer-actions">
+        <button type="button" class="btn-primary js-go-explorer">← 論証一覧へ戻る</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- ページ3：管理者のプロフィール -->
+  <div id="profile-view" class="container page-container" hidden>
+    <article id="profile-content" class="doc-card"></article>
   </div>
 
   <!-- 管理者ログイン用ダイアログ -->
@@ -90,6 +184,58 @@
       <div class="modal-actions">
         <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
         <button type="submit" class="btn-primary">ログイン</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 管理者プロフィール編集用ダイアログ（管理者専用） -->
+  <dialog id="profile-dialog" class="modal modal-wide">
+    <form id="profile-form" class="modal-form">
+      <div class="modal-head">
+        <h2>管理者プロフィールを編集</h2>
+        <button type="button" class="modal-close js-close-dialog">✕</button>
+      </div>
+
+      <div class="form-grid-2">
+        <label class="field">
+          <span>名前・ハンドルネーム</span>
+          <input type="text" id="profile-name" required placeholder="例：管理者名" />
+        </label>
+        <label class="field">
+          <span>肩書き・ひとこと（任意）</span>
+          <input type="text" id="profile-role" placeholder="例：哲学・論理学専攻 / サイト運営者" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>自己紹介</span>
+        <textarea id="profile-bio" rows="6" placeholder="自己紹介や、このサイトを作成した目的などを自由に記入してください。"></textarea>
+      </label>
+
+      <label class="field">
+        <span>関心領域・テーマ（カンマ区切り・任意）</span>
+        <input type="text" id="profile-interests" placeholder="例：分析哲学, 応用倫理学, 形式論理学, 人口倫理" />
+      </label>
+
+      <label class="field">
+        <span>外部リンク（1行に1件・任意。「表示名 | URL」または「URLのみ」）</span>
+        <textarea
+          id="profile-links"
+          rows="4"
+          placeholder="X (Twitter) | https://x.com/your_id&#10;note | https://note.com/your_id"
+        ></textarea>
+      </label>
+
+      <label class="field">
+        <span>連絡先・補足メモ（任意）</span>
+        <textarea id="profile-contact" rows="2" placeholder="誤植報告やご意見の送り先など"></textarea>
+      </label>
+
+      <p id="profile-error" class="form-error" hidden></p>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
+        <button type="submit" class="btn-primary">プロフィールを保存</button>
       </div>
     </form>
   </dialog>

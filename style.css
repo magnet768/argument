@@ -1248,3 +1248,257 @@ body.is-detail-view .detail-pager {
     font-size: 16px; /* iOS Safariの自動ズーム防止 */
   }
 }
+
+/* === 全ページ共通ナビゲーション === */
+.global-nav-bar {
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.global-nav-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 8px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-nav-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.page-nav-btn:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.page-nav-btn.is-active {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.global-auth-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 共通ナビ分だけ右側比較パネルの追従位置を調整 */
+.compare-panel {
+  top: 238px;
+  max-height: calc(100vh - 256px);
+}
+
+/* === 使い方・プロフィール用ドキュメントページ === */
+.page-container {
+  max-width: 880px;
+}
+
+.doc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+}
+
+.doc-header {
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.doc-header h2 {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  line-height: 1.35;
+}
+
+.doc-lead {
+  margin: 0;
+  font-size: 0.94rem;
+  color: var(--text-muted);
+}
+
+.doc-section {
+  margin-bottom: 26px;
+}
+
+.doc-section h3 {
+  margin: 0 0 10px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  padding-left: 10px;
+  border-left: 3px solid var(--text);
+}
+
+.doc-section p {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+
+.doc-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.91rem;
+}
+
+.doc-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.84em;
+}
+
+.coord-anatomy {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.anatomy-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.anatomy-arrow {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.guide-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.guide-box h4 {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+}
+
+.guide-box p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+/* プロフィール固有スタイル */
+.profile-role {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.profile-bio {
+  margin: 0;
+  font-size: 0.94rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.85;
+}
+
+.interest-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interest-tag {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.83rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 999px;
+}
+
+.profile-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-link-item a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--plus-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.profile-link-item a:hover {
+  text-decoration: underline;
+}
+
+.doc-footer-actions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .global-nav-inner {
+    padding: 8px 14px;
+  }
+
+  .doc-card {
+    padding: 20px 16px;
+  }
+
+  .guide-grid {
+    grid-template-columns: 1fr;
+  }
+}
