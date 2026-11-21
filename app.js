@@ -21,7 +21,7 @@ const state = {
   page: "explorer", drawerOpen: false, profile: { ...DEFAULT_PROFILE },
   adminComments: [], adminCommentsLoading: false, editingAdminCommentId: null,
   topics: [], topicsInDb: false, currentTopicId: DEFAULT_TOPIC.id,
-  stages: [], stagesInDb: false, arguments: [],
+  stages: [], stagesInDb: false, rawArguments: [], arguments: [],
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -61,6 +61,11 @@ const escapeHtml = (str) => String(str ?? "").replace(/&/g, "&amp;").replace(/</
 const safeUrl = (url) => (/^https?:\/\//i.test(String(url ?? "").trim()) ? String(url).trim() : "");
 const compareNatural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 const formatBasicProp = (text) => String(text ?? "").replace(/^(\s*\([+-]\d+)(\))/, "$1.00$2").replace(/^(\s*[+-]\d+)(?=\s|$)/, "$1.00");
+const stripBasicCoordPrefix = (text) => {
+  const s = String(text ?? "").trim();
+  const stripped = s.replace(/^(?:\([+-]\d+(?:\.\d+)?\)|[+-]\d+(?:\.\d+)?)\s*/, "").trim();
+  return stripped || s;
+};
 
 const normalizeProfile = (raw = {}) => ({
   name: String(raw.name ?? "").trim(), role: String(raw.role ?? "").trim(), bio: String(raw.bio ?? "").trim(),
@@ -108,6 +113,32 @@ function rebuildReferencedByMap() {
       if (referencedByMap.has(refCoord)) referencedByMap.get(refCoord).push(item.coord);
     }
   }
+}
+
+function rebuildArgumentsWithBasicProps() {
+  const byCoord = new Map();
+  for (const raw of state.rawArguments) {
+    byCoord.set(raw.coord, { ...raw, isAutoBasic: false });
+  }
+  for (const st of state.stages) {
+    const basicCoord = `${st.id}.00`;
+    if (!byCoord.has(basicCoord) && (st.plus || st.minus)) {
+      byCoord.set(basicCoord, {
+        coord: basicCoord,
+        stage: st.id,
+        topic: `${basicCoord} 基本命題`,
+        plusTitle: "基本命題",
+        plusBody: stripBasicCoordPrefix(st.plus),
+        minusTitle: "基本命題",
+        minusBody: stripBasicCoordPrefix(st.minus),
+        refs: [],
+        bibliography: [],
+        isAutoBasic: true
+      });
+    }
+  }
+  state.arguments = Array.from(byCoord.values()).sort((a, b) => compareNatural(a.coord, b.coord));
+  rebuildReferencedByMap();
 }
 
 const findStage = (id) => state.stages.find((s) => s.id === String(id));
@@ -328,7 +359,7 @@ async function ensureTopicsSeededInDb() {
 }
 async function loadStages() {
   const fallback = isLegacyTopic(state.currentTopicId) ? getDefaultStagesList() : [];
-  if (!db) { state.stages = fallback; state.stagesInDb = false; return; }
+  if (!db) { state.stages = fallback; state.stagesInDb = false; rebuildArgumentsWithBasicProps(); return; }
   try {
     const snap = await getDocs(stagesCollection());
     if (snap.empty) { state.stages = fallback; state.stagesInDb = false; }
@@ -339,6 +370,7 @@ async function loadStages() {
       state.stagesInDb = true;
     }
   } catch (err) { console.error(err); state.stages = fallback; state.stagesInDb = false; }
+  rebuildArgumentsWithBasicProps();
 }
 async function ensureStagesSeededInDb() {
   if (!db || !state.isAdmin || state.stagesInDb || !isLegacyTopic()) return;
@@ -348,8 +380,8 @@ async function ensureStagesSeededInDb() {
 async function loadArguments() {
   const legacy = isLegacyTopic(state.currentTopicId);
   if (!db) {
-    state.arguments = legacy ? DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord)) : [];
-    rebuildReferencedByMap();
+    state.rawArguments = legacy ? DEFAULT_ARGUMENTS.map(normalizeArg) : [];
+    rebuildArgumentsWithBasicProps();
     showNotice("firebase-config.js が未設定のため、ローカルの初期データのみで閲覧モード表示しています。");
     return;
   }
@@ -357,20 +389,20 @@ async function loadArguments() {
     const snap = await getDocs(argumentsCollection());
     if (snap.empty) {
       if (legacy) {
-        state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord));
+        state.rawArguments = DEFAULT_ARGUMENTS.map(normalizeArg);
         showNotice("データベースに命題が未登録です。左上のメニューから管理者ログイン後、「初期データをDBへ投入」を押すと初期データが登録されます。");
-      } else { state.arguments = []; showNotice(""); }
+      } else { state.rawArguments = []; showNotice(""); }
     } else {
       const rows = [];
       snap.forEach((d) => rows.push(normalizeArg({ coord: d.id, ...d.data() })));
-      state.arguments = rows.sort((a, b) => compareNatural(a.coord, b.coord));
+      state.rawArguments = rows;
       showNotice("");
     }
-    rebuildReferencedByMap();
+    rebuildArgumentsWithBasicProps();
   } catch (err) {
     console.error(err);
-    state.arguments = legacy ? DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord)) : [];
-    rebuildReferencedByMap();
+    state.rawArguments = legacy ? DEFAULT_ARGUMENTS.map(normalizeArg) : [];
+    rebuildArgumentsWithBasicProps();
     showNotice("データベースの読み込みに失敗しました。Firebaseの設定とルールを確認してください。");
   }
 }
@@ -570,14 +602,19 @@ function renderModeButtons() {
   });
 }
 function renderStageBanner() {
-  if (state.stage === "all") { els.stageBanner.innerHTML = ""; return; }
+  if (!state.isAdmin || state.stage === "all") {
+    els.stageBanner.hidden = true;
+    els.stageBanner.innerHTML = "";
+    return;
+  }
   const info = findStage(state.stage);
-  if (!info) { els.stageBanner.innerHTML = ""; return; }
-  const topic = getCurrentTopic();
-  const editBtn = state.isAdmin ? `<button type="button" class="banner-edit-btn js-edit-stage" data-stage-id="${escapeHtml(info.id)}">この水準を編集</button>` : "";
-  const boxes = `<div class="banner-box is-plus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.plusLabel)}の基本命題</span>${editBtn}</div><div>${escapeHtml(formatBasicProp(info.plus))}</div></div>
-    <div class="banner-box is-minus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.minusLabel)}の基本命題</span></div><div>${escapeHtml(formatBasicProp(info.minus))}</div></div>`;
-  els.stageBanner.innerHTML = `<div class="stage-banner-grid">${boxes}</div><details class="stage-banner-accordion"><summary class="stage-banner-summary"><span>基本命題</span></summary><div class="stage-banner-accordion-body">${boxes}</div></details>`;
+  if (!info) {
+    els.stageBanner.hidden = true;
+    els.stageBanner.innerHTML = "";
+    return;
+  }
+  els.stageBanner.hidden = false;
+  els.stageBanner.innerHTML = `<div style="display:flex;justify-content:flex-end;"><button type="button" class="admin-action-btn is-secondary js-edit-stage" data-stage-id="${escapeHtml(info.id)}">水準 ${escapeHtml(info.id)} のタブ・基本設定を編集</button></div>`;
 }
 function renderRefChips(refs, label) {
   if (!refs || refs.length === 0) return "";
@@ -846,7 +883,7 @@ function openArgDialog(coord = null) {
     els.argPlusTitle.value = item.plusTitle; els.argPlusBody.value = item.plusBody;
     els.argMinusTitle.value = item.minusTitle; els.argMinusBody.value = item.minusBody;
     els.argRefs.value = item.refs.join(", ");
-    els.argDeleteBtn.hidden = false;
+    els.argDeleteBtn.hidden = Boolean(item.isAutoBasic);
   } else {
     els.argDialogTitle.textContent = "新しい座標の命題を追加";
     els.argForm.reset();
@@ -1011,7 +1048,8 @@ els.topicDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingTopicId) return;
   const targetId = state.editingTopicId;
   if (state.topics.length <= 1) { els.topicError.textContent = "最後の1件の論題は削除できません。"; els.topicError.hidden = false; return; }
-  if (state.arguments.length > 0) { els.topicError.textContent = `この論題には ${state.arguments.length} 件の命題が残っています。先に削除してください。`; els.topicError.hidden = false; return; }
+  const savedArgsCount = state.rawArguments.length;
+  if (savedArgsCount > 0) { els.topicError.textContent = `この論題には ${savedArgsCount} 件の命題が残っています。先に削除してください。`; els.topicError.hidden = false; return; }
   if (!confirm(`論題「${findTopic(targetId)?.title || targetId}」を削除しますか？`)) return;
   try {
     await ensureTopicsSeededInDb();
@@ -1041,7 +1079,7 @@ els.stageForm.addEventListener("submit", async (e) => {
 
 els.stageDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingStageId) return;
-  const targetId = state.editingStageId, linked = state.arguments.filter((a) => a.stage === targetId).length;
+  const targetId = state.editingStageId, linked = state.rawArguments.filter((a) => a.stage === targetId).length;
   if (linked > 0) { els.stageError.textContent = `この水準には ${linked} 件の命題が紐づいています。`; els.stageError.hidden = false; return; }
   if (!confirm(`水準 ${targetId} を削除しますか？`)) return;
   try {
@@ -1140,8 +1178,9 @@ els.comparePanel.addEventListener("click", async (e) => {
   if (delBib && db && state.isAdmin) {
     const item = findArg(state.selectedCoord);
     if (!item) return;
+    const { isAutoBasic, ...cleanItem } = item;
     const nextBib = item.bibliography.filter((_, i) => i !== Number(delBib.dataset.index));
-    try { await setDoc(argumentDoc(item.coord), { ...item, bibliography: nextBib, updatedAt: serverTimestamp() }); item.bibliography = nextBib; renderList(); renderComparePanel(); }
+    try { await setDoc(argumentDoc(item.coord), { ...cleanItem, bibliography: nextBib, updatedAt: serverTimestamp() }); await loadArguments(); renderList(); renderComparePanel(); }
     catch (err) { console.error(err); alert("参考文献の削除に失敗しました。"); }
     return;
   }
@@ -1167,8 +1206,9 @@ els.comparePanel.addEventListener("submit", async (e) => {
     if (!db || !state.isAdmin) return;
     const item = findArg(state.selectedCoord), citation = $("bib-citation").value.trim();
     if (!item || !citation) return;
+    const { isAutoBasic, ...cleanItem } = item;
     const nextBib = [...item.bibliography, { citation, url: $("bib-url").value.trim(), note: $("bib-note").value.trim() }];
-    try { await setDoc(argumentDoc(item.coord), { ...item, bibliography: nextBib, updatedAt: serverTimestamp() }); item.bibliography = nextBib; renderList(); renderComparePanel(); }
+    try { await setDoc(argumentDoc(item.coord), { ...cleanItem, bibliography: nextBib, updatedAt: serverTimestamp() }); await loadArguments(); renderList(); renderComparePanel(); }
     catch (err) { console.error(err); alert("参考文献の追加に失敗しました。"); }
     return;
   }
