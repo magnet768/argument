@@ -156,12 +156,10 @@ function setEvaluation(coord, value) {
 function renderEvalControl(coord, { isPanel = false } = {}) {
   const topic = getCurrentTopic();
   const cur = getEvaluation(coord);
-  const cnt = getConsequenceCoords(coord).length - 1;
   const curLabel = cur === "plus" ? topic.plusLabel : cur === "minus" ? topic.minusLabel : "保留";
-  const note = cnt > 0 ? `（帰結 ${cnt}命題へ連動）` : "";
   return `
     <div class="eval-row ${isPanel ? "is-panel" : ""}">
-      <span class="eval-label">評価：${escapeHtml(curLabel)}${escapeHtml(note)}</span>
+      <span class="eval-label">評価：${escapeHtml(curLabel)}</span>
       <div class="eval-group" role="group" aria-label="命題の評価">
         <button type="button" class="eval-btn js-eval-btn ${cur === "plus" ? "is-active" : ""}" data-coord="${escapeHtml(coord)}" data-eval="plus" title="${escapeHtml(topic.plusLabel)}" aria-label="${escapeHtml(topic.plusLabel)}">+</button>
         <button type="button" class="eval-btn js-eval-btn ${cur === "hold" ? "is-active" : ""}" data-coord="${escapeHtml(coord)}" data-eval="hold" title="保留" aria-label="保留">=</button>
