@@ -1898,3 +1898,37 @@ body.is-detail-view .detail-pager {
   background: var(--minus-main);
   color: #ffffff;
 }
+
+/* === スマホでの表示モード・水準タブの横スクロールと右端フェード === */
+@media (max-width: 720px) {
+  .controls {
+    min-width: 0;
+  }
+
+  .mode-group {
+    display: flex;
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-right: 28px;
+    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
+  }
+
+  .mode-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mode-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .stage-tabs {
+    padding-right: 28px;
+    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
+  }
+}
