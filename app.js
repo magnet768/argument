@@ -28,7 +28,6 @@ const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
 const DEFAULT_TOPIC = {
   id: "antinatalism",
   title: "反出生主義と反論：細分化論証エクスプローラー",
-  subtitle: "座標インデックスによる立場別通読・符号反転比較・参考文献・議論コメント",
   plusLabel: "肯定側",
   minusLabel: "反論側",
   order: 1,
@@ -105,6 +104,7 @@ const els = {
   topPageLabel: document.getElementById("top-page-label"),
 
   explorerHeaderPanel: document.getElementById("explorer-header-panel"),
+  explorerAdminBar: document.getElementById("explorer-admin-bar"),
   explorerView: document.getElementById("explorer-view"),
   guideView: document.getElementById("guide-view"),
   profileView: document.getElementById("profile-view"),
@@ -113,8 +113,6 @@ const els = {
   topicSelect: document.getElementById("topic-select"),
   editTopicBtn: document.getElementById("edit-topic-btn"),
   addTopicBtn: document.getElementById("add-topic-btn"),
-  siteTitle: document.getElementById("site-title"),
-  siteSubtitle: document.getElementById("site-subtitle"),
 
   stageTabs: document.getElementById("stage-tabs"),
   stageBanner: document.getElementById("stage-banner"),
@@ -153,7 +151,6 @@ const els = {
   topicForm: document.getElementById("topic-form"),
   topicId: document.getElementById("topic-id"),
   topicTitle: document.getElementById("topic-title"),
-  topicSubtitle: document.getElementById("topic-subtitle"),
   topicPlusLabel: document.getElementById("topic-plus-label"),
   topicMinusLabel: document.getElementById("topic-minus-label"),
   topicDeleteBtn: document.getElementById("topic-delete-btn"),
@@ -232,7 +229,6 @@ function normalizeTopic(raw) {
   return {
     id,
     title: String(raw.title ?? id).trim(),
-    subtitle: String(raw.subtitle ?? "").trim(),
     plusLabel: String(raw.plusLabel ?? "肯定側").trim() || "肯定側",
     minusLabel: String(raw.minusLabel ?? "反論側").trim() || "反論側",
     order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : 9999,
@@ -950,14 +946,12 @@ function renderTopicBar() {
     .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.title)}</option>`)
     .join("");
   els.topicSelect.value = topic.id;
-  els.siteTitle.textContent = topic.title;
-  els.siteSubtitle.textContent = topic.subtitle;
-  els.siteSubtitle.hidden = !topic.subtitle;
 }
 
 function renderAdminBar() {
   els.adminBadge.hidden = !state.isAdmin;
   els.drawerAdminStatus.hidden = !state.isAdmin;
+  els.explorerAdminBar.hidden = !state.isAdmin;
   els.editTopicBtn.hidden = !state.isAdmin;
   els.addTopicBtn.hidden = !state.isAdmin;
   els.addStageBtn.hidden = !state.isAdmin;
@@ -969,8 +963,8 @@ function renderAdminBar() {
 
 function renderTabs() {
   const tabDefs = [
-    ...state.stages.map((s) => ({ id: s.id, label: s.label })),
-    { id: "all", label: `全${state.arguments.length}命題` }
+    { id: "all", label: `全${state.arguments.length}命題` },
+    ...state.stages.map((s) => ({ id: s.id, label: s.label }))
   ];
   els.stageTabs.innerHTML = tabDefs
     .map((t) => `<button type="button" class="tab-btn ${state.stage === t.id ? "is-active" : ""}" data-stage="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`)
@@ -1412,7 +1406,6 @@ function openTopicDialog(topicId = null) {
     els.topicId.value = info.id;
     els.topicId.readOnly = true;
     els.topicTitle.value = info.title;
-    els.topicSubtitle.value = info.subtitle;
     els.topicPlusLabel.value = info.plusLabel;
     els.topicMinusLabel.value = info.minusLabel;
     els.topicDeleteBtn.hidden = false;
@@ -1736,7 +1729,6 @@ els.topicForm.addEventListener("submit", async (e) => {
   const payload = {
     id,
     title: els.topicTitle.value.trim(),
-    subtitle: els.topicSubtitle.value.trim(),
     plusLabel: els.topicPlusLabel.value.trim() || "肯定側",
     minusLabel: els.topicMinusLabel.value.trim() || "反論側",
     order: existing ? existing.order : maxOrder + 1,

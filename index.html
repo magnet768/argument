@@ -43,17 +43,10 @@
 
     <!-- 論証ページ専用の操作ヘッダー -->
     <div id="explorer-header-panel" class="header-inner">
-      <div class="title-row">
-        <div>
-          <h1 id="site-title">反出生主義と反論：細分化論証エクスプローラー</h1>
-          <span id="site-subtitle" class="subtitle">座標インデックスによる立場別通読・符号反転比較・参考文献・議論コメント</span>
-        </div>
-
-        <div class="admin-bar">
-          <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 水準を追加</button>
-          <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規命題を追加</button>
-          <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
-        </div>
+      <div id="explorer-admin-bar" class="admin-bar explorer-admin-bar" hidden>
+        <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 水準を追加</button>
+        <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規命題を追加</button>
+        <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
       </div>
 
       <nav id="stage-tabs" class="stage-tabs" aria-label="水準の切替"></nav>
@@ -283,11 +276,6 @@
       <label class="field">
         <span>論題タイトル</span>
         <input type="text" id="topic-title" required placeholder="例：死刑制度の是非と反論" />
-      </label>
-
-      <label class="field">
-        <span>サブタイトル・説明（任意）</span>
-        <input type="text" id="topic-subtitle" placeholder="例：座標インデックスによる論証の構造化" />
       </label>
 
       <div class="form-grid-2">

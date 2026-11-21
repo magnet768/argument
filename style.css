@@ -1817,3 +1817,13 @@ body.is-detail-view .detail-pager {
   border-radius: 5px;
   margin-bottom: 6px;
 }
+
+/* === タイトル行削除に伴うヘッダー・右パネル位置調整 === */
+.explorer-admin-bar {
+  margin-bottom: 10px;
+}
+
+.compare-panel {
+  top: 158px;
+  max-height: calc(100vh - 176px);
+}
