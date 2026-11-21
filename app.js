@@ -576,8 +576,7 @@ function renderStageBanner() {
   const editBtn = state.isAdmin ? `<button type="button" class="banner-edit-btn js-edit-stage" data-stage-id="${escapeHtml(info.id)}">この水準を編集</button>` : "";
   const boxes = `<div class="banner-box is-plus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.plusLabel)}の基本命題</span>${editBtn}</div><div>${escapeHtml(info.plus)}</div></div>
     <div class="banner-box is-minus"><div class="banner-head-row"><span class="banner-label">${escapeHtml(topic.minusLabel)}の基本命題</span></div><div>${escapeHtml(info.minus)}</div></div>`;
-  const summary = state.mode === "minus" ? info.minus : info.plus;
-  els.stageBanner.innerHTML = `<div class="stage-banner-grid">${boxes}</div><details class="stage-banner-accordion"><summary class="stage-banner-summary"><span>基本命題：${escapeHtml(summary)}</span></summary><div class="stage-banner-accordion-body">${boxes}</div></details>`;
+  els.stageBanner.innerHTML = `<div class="stage-banner-grid">${boxes}</div><details class="stage-banner-accordion"><summary class="stage-banner-summary"><span>基本命題</span></summary><div class="stage-banner-accordion-body">${boxes}</div></details>`;
 }
 function renderRefChips(refs, label) {
   if (!refs || refs.length === 0) return "";
