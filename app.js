@@ -40,10 +40,10 @@ if (isFirebaseConfigured) {
 
 // === 2. アプリケーション状態 ===
 const state = {
-  stages: [],             // 全主張段階: [{ id, label, plus, minus }]
-  stagesInDb: false,      // stages コレクションが DB に保存済みか
-  arguments: [],          // 全論証
-  stage: "1",             // 選択中の段階 ID または "all"
+  stages: [],
+  stagesInDb: false,
+  arguments: [],
+  stage: "1",
   mode: "plus",           // "plus" | "minus" | "split"
   selectedCoord: "1.10",
   query: "",
@@ -52,7 +52,10 @@ const state = {
   comments: [],
   commentsLoading: false,
   editingCoord: null,
-  editingStageId: null
+  editingStageId: null,
+  detailOpen: false,      // 専用詳細ページを表示中か
+  savedListScrollY: 0,    // 一覧へ戻るときのスクロール位置
+  pushedDetailHistory: false
 };
 
 let referencedByMap = new Map();
@@ -108,6 +111,10 @@ const els = {
 };
 
 // === 3. ユーティリティ ===
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 980px)").matches;
+}
+
 function escapeHtml(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
@@ -200,11 +207,17 @@ function formatDate(ts) {
   });
 }
 
-function syncUrlHash() {
-  if (!state.selectedCoord) return;
+function getCurrentHash() {
+  if (!state.selectedCoord) return "";
   const prefix = state.mode === "plus" ? "+" : state.mode === "minus" ? "-" : "";
+  return `#${prefix}${state.selectedCoord}`;
+}
+
+function syncUrlHash() {
+  const hash = getCurrentHash();
+  if (!hash) return;
   try {
-    history.replaceState(null, "", `#${prefix}${state.selectedCoord}`);
+    history.replaceState(history.state, "", hash);
   } catch {
     // 制限環境を無視
   }
@@ -212,7 +225,7 @@ function syncUrlHash() {
 
 function parseInitialHash() {
   const raw = decodeURIComponent(window.location.hash.replace(/^#/, "")).trim();
-  if (!raw) return;
+  if (!raw) return false;
 
   let mode = state.mode;
   let coord = raw;
@@ -226,14 +239,16 @@ function parseInitialHash() {
   }
 
   const found = findArg(coord);
-  if (!found) return;
+  if (!found) return false;
 
   state.stage = found.stage;
   state.mode = mode;
   state.selectedCoord = found.coord;
+  return true;
 }
 
 function focusCard(coord) {
+  if (state.detailOpen) return;
   requestAnimationFrame(() => {
     const card = els.argList.querySelector(`[data-coord="${CSS.escape(coord)}"]`);
     if (!card) return;
@@ -244,7 +259,67 @@ function focusCard(coord) {
   });
 }
 
-// === 4. Firestore データ操作 ===
+// === 4. 専用詳細ページの開閉 ===
+function applyDetailBodyClass() {
+  document.body.classList.toggle("is-detail-view", state.detailOpen);
+}
+
+function openDetailView(coord, { pushBrowserHistory = true } = {}) {
+  const item = findArg(coord);
+  if (!item) return;
+
+  const wasOpen = state.detailOpen;
+  if (!wasOpen) {
+    state.savedListScrollY = window.scrollY;
+  }
+
+  const coordChanged = state.selectedCoord !== coord;
+  state.selectedCoord = coord;
+  state.detailOpen = true;
+  applyDetailBodyClass();
+
+  if (pushBrowserHistory && !wasOpen) {
+    try {
+      history.pushState({ detailOpen: true, coord }, "", getCurrentHash());
+      state.pushedDetailHistory = true;
+    } catch {
+      state.pushedDetailHistory = false;
+    }
+  } else {
+    syncUrlHash();
+  }
+
+  renderList();
+  renderComparePanel();
+  window.scrollTo({ top: 0, behavior: "instant" });
+
+  if (coordChanged || !wasOpen) {
+    loadCommentsForCoord(coord);
+  }
+}
+
+function closeDetailView({ restoreScroll = true } = {}) {
+  if (!state.detailOpen) return;
+  state.detailOpen = false;
+  state.pushedDetailHistory = false;
+  applyDetailBodyClass();
+  renderAll();
+  if (restoreScroll) {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: state.savedListScrollY, behavior: "instant" });
+    });
+  }
+}
+
+function requestCloseDetailView() {
+  if (state.pushedDetailHistory) {
+    history.back();
+  } else {
+    closeDetailView({ restoreScroll: true });
+  }
+}
+
+// === 5. Firestore データ操作 ===
 async function loadStages() {
   const fallback = getDefaultStagesList();
   if (!db) {
@@ -273,7 +348,6 @@ async function loadStages() {
   }
 }
 
-// 段階1〜4がまだ DB に未保存の場合、新規段階追加で消えないよう自動で DB へ同期する
 async function ensureStagesSeededInDb() {
   if (!db || !state.isAdmin || state.stagesInDb) return;
   const defaults = getDefaultStagesList();
@@ -392,7 +466,7 @@ async function seedInitialDataToFirestore() {
   }
 }
 
-// === 5. 描画関数 ===
+// === 6. 描画関数 ===
 function getFilteredArguments() {
   const q = state.query.trim().toLowerCase();
   return state.arguments.filter((item) => {
@@ -478,7 +552,7 @@ function renderStageBanner() {
     ? `<button type="button" class="banner-edit-btn js-edit-stage" data-stage-id="${escapeHtml(info.id)}">この段階を編集</button>`
     : "";
 
-  els.stageBanner.innerHTML = `
+  const boxesHtml = `
     <div class="banner-box is-plus">
       <div class="banner-head-row">
         <span class="banner-label">肯定側の基本主張</span>
@@ -492,6 +566,18 @@ function renderStageBanner() {
       </div>
       <div>${escapeHtml(info.minus)}</div>
     </div>
+  `;
+
+  const summaryText = state.mode === "minus" ? info.minus : info.plus;
+
+  els.stageBanner.innerHTML = `
+    <div class="stage-banner-grid">${boxesHtml}</div>
+    <details class="stage-banner-accordion">
+      <summary class="stage-banner-summary">
+        <span>基本主張：${escapeHtml(summaryText)}</span>
+      </summary>
+      <div class="stage-banner-accordion-body">${boxesHtml}</div>
+    </details>
   `;
 }
 
@@ -544,8 +630,8 @@ function renderList() {
                 ${bibPill}
               </div>
               <div>
-                <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">+${escapeHtml(item.coord)} まとめへ</button>
-                <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">-${escapeHtml(item.coord)} まとめへ</button>
+                <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">+${escapeHtml(item.coord)} まとめ</button>
+                <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">-${escapeHtml(item.coord)} まとめ</button>
               </div>
             </div>
             <div class="split-grid">
@@ -560,7 +646,10 @@ function renderList() {
                 <div>${escapeHtml(item.minusBody)}</div>
               </div>
             </div>
-            ${renderRefChips(item.refs, "関連前提")}
+            <div class="card-footer-row">
+              ${renderRefChips(item.refs, "前提")}
+              <span class="card-detail-hint">詳細・文献・コメント ›</span>
+            </div>
           </article>
         `;
       } else {
@@ -584,10 +673,13 @@ function renderList() {
                 class="flip-btn js-flip-btn"
                 data-coord="${escapeHtml(item.coord)}"
                 data-target-mode="${oppMode}"
-              >⇄ ${oppSign}${escapeHtml(item.coord)} へ反転ジャンプ</button>
+              >⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button>
             </div>
             <p class="card-body">${escapeHtml(body)}</p>
-            ${renderRefChips(item.refs, "前提論証")}
+            <div class="card-footer-row">
+              ${renderRefChips(item.refs, "前提")}
+              <span class="card-detail-hint">詳細・比較・コメント ›</span>
+            </div>
           </article>
         `;
       }
@@ -637,7 +729,7 @@ function renderBibliographySection(item) {
     : "";
 
   return `
-    <section class="panel-section">
+    <section class="panel-section" id="detail-bib-section">
       <h3 class="panel-section-title">
         <span>参考文献（座標 ${escapeHtml(item.coord)}）</span>
         <span class="bib-count-pill">${item.bibliography.length}件</span>
@@ -703,7 +795,7 @@ function renderCommentsSection(item) {
     : "";
 
   return `
-    <section class="panel-section">
+    <section class="panel-section" id="detail-comments-section">
       <h3 class="panel-section-title">
         <span>閲覧者コメント（座標 ${escapeHtml(item.coord)}）</span>
         <span class="bib-count-pill">${state.comments.length}件</span>
@@ -722,12 +814,20 @@ function renderComparePanel() {
   }
 
   const backRefs = referencedByMap.get(item.coord) || [];
+  const listForPager = getFilteredArguments();
+  const currentIdx = listForPager.findIndex((a) => a.coord === item.coord);
+  const prevItem = currentIdx > 0 ? listForPager[currentIdx - 1] : null;
+  const nextItem =
+    currentIdx >= 0 && currentIdx < listForPager.length - 1 ? listForPager[currentIdx + 1] : null;
 
   els.comparePanel.innerHTML = `
-    <div class="compare-head">
-      <h2>座標 ${escapeHtml(item.coord)} の対照比較</h2>
-      <div class="compare-head-actions">
-        <span class="coord-badge is-neutral">段階 ${escapeHtml(item.stage)}</span>
+    <div class="detail-topbar">
+      <div class="detail-topbar-left">
+        <button type="button" class="detail-back-btn js-close-detail">← 一覧</button>
+        <span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>
+      </div>
+      <div class="detail-topbar-right">
+        <button type="button" class="detail-quick-btn js-scroll-comments">💬 コメント (${state.comments.length})</button>
         ${
           state.isAdmin
             ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>`
@@ -735,34 +835,65 @@ function renderComparePanel() {
         }
       </div>
     </div>
-    <div class="compare-topic">${escapeHtml(item.topic)}</div>
 
-    <div class="compare-box is-plus">
-      <div class="compare-box-head">
-        <span class="coord-badge is-plus">+${escapeHtml(item.coord)} 肯定側</span>
-        <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">一覧で表示</button>
+    <div class="detail-body">
+      <div class="compare-head">
+        <h2>座標 ${escapeHtml(item.coord)} の対照比較</h2>
+        <div class="compare-head-actions">
+          <span class="coord-badge is-neutral">段階 ${escapeHtml(item.stage)}</span>
+          <button type="button" class="flip-btn js-expand-detail" data-coord="${escapeHtml(item.coord)}">⤢ 拡大</button>
+          ${
+            state.isAdmin
+              ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>`
+              : ""
+          }
+        </div>
       </div>
-      <h3>${escapeHtml(item.plusTitle)}</h3>
-      <p>${escapeHtml(item.plusBody)}</p>
-    </div>
+      <div class="compare-topic">${escapeHtml(item.topic)}</div>
 
-    <div class="compare-box is-minus">
-      <div class="compare-box-head">
-        <span class="coord-badge is-minus">-${escapeHtml(item.coord)} 反論側</span>
-        <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">一覧で表示</button>
+      <div class="compare-box is-plus">
+        <div class="compare-box-head">
+          <span class="coord-badge is-plus">+${escapeHtml(item.coord)} 肯定側</span>
+          <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">一覧で表示</button>
+        </div>
+        <h3>${escapeHtml(item.plusTitle)}</h3>
+        <p>${escapeHtml(item.plusBody)}</p>
       </div>
-      <h3>${escapeHtml(item.minusTitle)}</h3>
-      <p>${escapeHtml(item.minusBody)}</p>
-    </div>
 
-    ${renderRefChips(item.refs, "この論証が参照する前提")}
-    ${renderRefChips(backRefs, "この論証を参照している論証")}
-    ${renderBibliographySection(item)}
-    ${renderCommentsSection(item)}
+      <div class="compare-box is-minus">
+        <div class="compare-box-head">
+          <span class="coord-badge is-minus">-${escapeHtml(item.coord)} 反論側</span>
+          <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">一覧で表示</button>
+        </div>
+        <h3>${escapeHtml(item.minusTitle)}</h3>
+        <p>${escapeHtml(item.minusBody)}</p>
+      </div>
+
+      ${renderRefChips(item.refs, "この論証が参照する前提")}
+      ${renderRefChips(backRefs, "この論証を参照している論証")}
+      ${renderBibliographySection(item)}
+      ${renderCommentsSection(item)}
+
+      <div class="detail-pager">
+        <button
+          type="button"
+          class="pager-btn js-pager-nav"
+          data-coord="${prevItem ? escapeHtml(prevItem.coord) : ""}"
+          ${prevItem ? "" : "disabled"}
+        >${prevItem ? `← 前の座標 (${escapeHtml(prevItem.coord)})` : "← 前の座標なし"}</button>
+        <button
+          type="button"
+          class="pager-btn js-pager-nav"
+          data-coord="${nextItem ? escapeHtml(nextItem.coord) : ""}"
+          ${nextItem ? "" : "disabled"}
+        >${nextItem ? `次の座標 (${escapeHtml(nextItem.coord)}) →` : "次の座標なし →"}</button>
+      </div>
+    </div>
   `;
 }
 
 function renderAll() {
+  applyDetailBodyClass();
   renderAdminBar();
   renderTabs();
   renderModeButtons();
@@ -772,7 +903,7 @@ function renderAll() {
   syncUrlHash();
 }
 
-// === 6. ナビゲーション操作 ===
+// === 7. ナビゲーション操作 ===
 function selectCoord(coord, { reloadComments = true } = {}) {
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
@@ -784,7 +915,7 @@ function selectCoord(coord, { reloadComments = true } = {}) {
   }
 }
 
-function jumpTo(coord, targetMode) {
+function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   const item = findArg(coord);
   if (!item) return;
 
@@ -801,16 +932,26 @@ function jumpTo(coord, targetMode) {
     state.mode = targetMode;
   }
 
-  const coordChanged = state.selectedCoord !== coord;
-  state.selectedCoord = coord;
-
   if (state.query) {
     state.query = "";
     els.searchInput.value = "";
   }
 
+  if (closeDetail && state.detailOpen) {
+    state.detailOpen = false;
+    state.pushedDetailHistory = false;
+    applyDetailBodyClass();
+  }
+
+  const coordChanged = state.selectedCoord !== coord;
+  state.selectedCoord = coord;
+
   renderAll();
-  focusCard(coord);
+  if (state.detailOpen) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else {
+    focusCard(coord);
+  }
   if (coordChanged) {
     loadCommentsForCoord(coord);
   }
@@ -837,7 +978,7 @@ function goBack() {
   }
 }
 
-// === 7. 管理者モーダル操作 ===
+// === 8. 管理者モーダル操作 ===
 function openArgDialog(coord = null) {
   els.argError.hidden = true;
   state.editingCoord = coord;
@@ -904,7 +1045,14 @@ function openStageDialog(stageId = null) {
   els.stageDialog.showModal();
 }
 
-// === 8. イベント登録 ===
+// === 9. イベント登録 ===
+// スマホの「戻る」ボタン（スワイプバック）で詳細ページから一覧へ戻る
+window.addEventListener("popstate", () => {
+  if (state.detailOpen) {
+    closeDetailView({ restoreScroll: true });
+  }
+});
+
 document.querySelectorAll(".js-close-dialog").forEach((btn) => {
   btn.addEventListener("click", () => {
     btn.closest("dialog")?.close();
@@ -973,7 +1121,6 @@ els.stageForm.addEventListener("submit", async (e) => {
     els.stageDialog.close();
     await loadStages();
 
-    // 論証追加ダイアログが開いている途中なら、選択肢を更新して新しい段階を自動選択
     if (els.argDialog.open) {
       populateStageSelect(id);
     } else {
@@ -1081,7 +1228,11 @@ els.argDeleteBtn.addEventListener("click", async () => {
     els.argDialog.close();
     await loadArguments();
     state.selectedCoord = state.arguments[0]?.coord || "";
-    renderAll();
+    if (state.detailOpen) {
+      closeDetailView({ restoreScroll: false });
+    } else {
+      renderAll();
+    }
     loadCommentsForCoord(state.selectedCoord);
   } catch (err) {
     console.error(err);
@@ -1144,11 +1295,40 @@ els.argList.addEventListener("click", (e) => {
 
   const card = e.target.closest(".arg-card");
   if (card) {
-    selectCoord(card.dataset.coord);
+    if (isMobileViewport()) {
+      openDetailView(card.dataset.coord);
+    } else {
+      selectCoord(card.dataset.coord);
+    }
   }
 });
 
 els.comparePanel.addEventListener("click", async (e) => {
+  if (e.target.closest(".js-close-detail")) {
+    requestCloseDetailView();
+    return;
+  }
+
+  const expandBtn = e.target.closest(".js-expand-detail");
+  if (expandBtn) {
+    openDetailView(expandBtn.dataset.coord);
+    return;
+  }
+
+  if (e.target.closest(".js-scroll-comments")) {
+    const target = document.getElementById("detail-comments-section");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    return;
+  }
+
+  const pagerBtn = e.target.closest(".js-pager-nav");
+  if (pagerBtn && pagerBtn.dataset.coord) {
+    openDetailView(pagerBtn.dataset.coord, { pushBrowserHistory: false });
+    return;
+  }
+
   const editBtn = e.target.closest(".js-edit-arg");
   if (editBtn) {
     openArgDialog(editBtn.dataset.coord);
@@ -1157,13 +1337,17 @@ els.comparePanel.addEventListener("click", async (e) => {
 
   const jumpBtn = e.target.closest(".js-jump-mode");
   if (jumpBtn) {
-    jumpTo(jumpBtn.dataset.coord, jumpBtn.dataset.targetMode);
+    jumpTo(jumpBtn.dataset.coord, jumpBtn.dataset.targetMode, { closeDetail: true });
     return;
   }
 
   const refBtn = e.target.closest(".js-ref-btn");
   if (refBtn) {
-    jumpTo(refBtn.dataset.ref, null);
+    if (state.detailOpen) {
+      openDetailView(refBtn.dataset.ref, { pushBrowserHistory: false });
+    } else {
+      jumpTo(refBtn.dataset.ref, null);
+    }
     return;
   }
 
@@ -1266,7 +1450,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
   }
 });
 
-// === 9. 初期化 ===
+// === 10. 初期化 ===
 async function init() {
   if (auth) {
     onAuthStateChanged(auth, (user) => {
@@ -1285,7 +1469,13 @@ async function init() {
   if (!findArg(state.selectedCoord) && state.arguments.length > 0) {
     state.selectedCoord = state.arguments[0].coord;
   }
-  parseInitialHash();
+
+  const hasInitialHash = parseInitialHash();
+  // スマホで共有リンク（例：#-1.21）を直接開いた場合は、そのまま専用詳細ページを表示する
+  if (hasInitialHash && isMobileViewport()) {
+    state.detailOpen = true;
+  }
+
   renderAll();
   await loadCommentsForCoord(state.selectedCoord);
 }
