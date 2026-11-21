@@ -566,7 +566,7 @@ function renderModeButtons() {
     if (m === "plus") btn.textContent = `+ ${topic.plusLabel}`;
     if (m === "minus") btn.textContent = `- ${topic.minusLabel}`;
     if (m === "split") btn.textContent = "⇄ 比較";
-    if (m === "mine") btn.textContent = "自説";
+    if (m === "mine") btn.textContent = "☆自説";
     btn.classList.toggle("is-active", m === state.mode);
   });
 }
