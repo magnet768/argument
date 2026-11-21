@@ -977,7 +977,7 @@ function renderModeButtons() {
     const mode = btn.dataset.mode;
     if (mode === "plus") btn.textContent = `+ ${topic.plusLabel}`;
     if (mode === "minus") btn.textContent = `- ${topic.minusLabel}`;
-    if (mode === "split") btn.textContent = "⇄ 並置比較";
+    if (mode === "split") btn.textContent = "⇄ 比較";
     btn.classList.toggle("is-active", mode === state.mode);
   });
   els.backBtn.disabled = state.history.length === 0;
@@ -1271,7 +1271,7 @@ function renderComparePanel() {
 
     <div class="detail-body">
       <div class="compare-head">
-        <h2>座標 ${escapeHtml(item.coord)} の対照比較</h2>
+        <h2>座標 ${escapeHtml(item.coord)} の比較</h2>
         <div class="compare-head-actions">
           <span class="coord-badge is-neutral">水準 ${escapeHtml(item.stage)}</span>
           <button type="button" class="flip-btn js-expand-detail" data-coord="${escapeHtml(item.coord)}">⤢ 拡大</button>
