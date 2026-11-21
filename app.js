@@ -65,6 +65,9 @@ const state = {
   page: "explorer",       // "explorer" | "guide" | "profile"
   drawerOpen: false,
   profile: { ...DEFAULT_PROFILE },
+  adminComments: [],
+  adminCommentsLoading: false,
+  editingAdminCommentId: null,
   topics: [],
   topicsInDb: false,
   currentTopicId: DEFAULT_TOPIC.id,
@@ -80,7 +83,7 @@ const state = {
   isAdmin: false,
   comments: [],
   commentsLoading: false,
-  editingCommentId: null, // インライン編集中のコメントID
+  editingCommentId: null,
   editingTopicId: null,
   editingCoord: null,
   editingStageId: null,
@@ -472,12 +475,16 @@ function switchPage(nextPage) {
   closeNavDrawer();
   state.page = nextPage;
   state.editingCommentId = null;
+  state.editingAdminCommentId = null;
   if (nextPage !== "explorer" && state.detailOpen) {
     state.detailOpen = false;
     state.pushedDetailHistory = false;
   }
   renderAll();
   window.scrollTo({ top: 0, behavior: "instant" });
+  if (nextPage === "profile") {
+    loadAdminComments();
+  }
 }
 
 function openDetailView(coord, { pushBrowserHistory = true } = {}) {
@@ -565,6 +572,38 @@ async function loadProfile() {
   } catch (err) {
     console.error(err);
     state.profile = { ...DEFAULT_PROFILE };
+  }
+}
+
+async function loadAdminComments() {
+  if (!db) {
+    state.adminComments = [];
+    state.adminCommentsLoading = false;
+    renderProfilePage();
+    return;
+  }
+
+  state.adminCommentsLoading = true;
+  renderProfilePage();
+
+  try {
+    const snap = await getDocs(collection(db, "adminComments"));
+    const list = [];
+    snap.forEach((docSnap) => {
+      list.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    list.sort((a, b) => {
+      const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return tb - ta;
+    });
+    state.adminComments = list;
+  } catch (err) {
+    console.error(err);
+    state.adminComments = [];
+  } finally {
+    state.adminCommentsLoading = false;
+    renderProfilePage();
   }
 }
 
@@ -872,6 +911,136 @@ function renderPageVisibility() {
   }
 }
 
+function renderAdminCommentsSection() {
+  const catMap = {
+    bibliography: { text: "参考文献への異議・補足", cls: "is-bibliography" },
+    correction: { text: "命題・論証の修正提案", cls: "is-correction" },
+    other: { text: "その他・ご意見", cls: "is-other" }
+  };
+
+  let bodyHtml = "";
+  if (!db) {
+    bodyHtml = `<p class="empty-muted">Firebase を設定すると、管理者へのコメント機能が有効になります。</p>`;
+  } else if (state.adminCommentsLoading) {
+    bodyHtml = `<p class="empty-muted">コメントを読み込み中...</p>`;
+  } else if (state.adminComments.length === 0) {
+    bodyHtml = `<p class="empty-muted">管理者へのコメントはまだありません。</p>`;
+  } else {
+    bodyHtml = `<ul class="comment-list">${state.adminComments
+      .map((c) => {
+        const cat = catMap[c.category] || catMap.other;
+        const owner = isCommentOwner(c);
+        const canEdit = owner;
+        const canDelete = owner || state.isAdmin;
+        const isEditing = canEdit && state.editingAdminCommentId === c.id;
+
+        if (isEditing) {
+          return `
+            <li class="comment-item">
+              <form class="mini-form js-admin-comment-edit-form" data-id="${escapeHtml(c.id)}">
+                <div class="form-grid-2">
+                  <input
+                    type="text"
+                    name="author"
+                    maxlength="40"
+                    value="${escapeHtml(c.author === "匿名" ? "" : c.author || "")}"
+                    placeholder="お名前（空欄で匿名）"
+                  />
+                  <select name="category">
+                    <option value="bibliography" ${c.category === "bibliography" ? "selected" : ""}>参考文献への異議・補足</option>
+                    <option value="correction" ${c.category === "correction" ? "selected" : ""}>命題・論証の修正提案</option>
+                    <option value="other" ${c.category === "other" ? "selected" : ""}>その他・ご意見</option>
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  name="targetRef"
+                  maxlength="80"
+                  value="${escapeHtml(c.targetRef || "")}"
+                  placeholder="対象の論題・座標（任意 例：反出生主義 / 座標 1.10）"
+                />
+                <textarea name="body" rows="4" maxlength="1000" required>${escapeHtml(c.body)}</textarea>
+                <div class="comment-edit-actions">
+                  <button type="button" class="btn-secondary js-cancel-edit-admin-comment">キャンセル</button>
+                  <button type="submit" class="btn-primary">変更を保存</button>
+                </div>
+              </form>
+            </li>`;
+        }
+
+        return `
+          <li class="comment-item">
+            <div class="comment-meta">
+              <div>
+                <span class="admin-comment-cat ${cat.cls}">${escapeHtml(cat.text)}</span>
+                <span class="comment-author">${escapeHtml(c.author || "匿名")}</span>
+                <span>・${escapeHtml(formatDate(c.createdAt))}</span>
+                ${c.updatedAt ? `<span class="comment-edited-tag">（編集済み）</span>` : ""}
+              </div>
+              <div class="comment-actions">
+                ${
+                  canEdit
+                    ? `<button type="button" class="btn-xs-edit js-edit-admin-comment" data-id="${escapeHtml(c.id)}">編集</button>`
+                    : ""
+                }
+                ${
+                  canDelete
+                    ? `<button type="button" class="btn-xs-danger js-delete-admin-comment" data-id="${escapeHtml(c.id)}">削除</button>`
+                    : ""
+                }
+              </div>
+            </div>
+            ${c.targetRef ? `<div class="admin-comment-target">対象：${escapeHtml(c.targetRef)}</div>` : ""}
+            <p class="comment-body">${escapeHtml(c.body)}</p>
+          </li>`;
+      })
+      .join("")}</ul>`;
+  }
+
+  const formHtml = db
+    ? `
+      <form id="admin-comment-add-form" class="mini-form">
+        <div class="form-grid-2">
+          <input type="text" id="admin-comment-author" maxlength="40" placeholder="お名前（空欄で匿名）" />
+          <select id="admin-comment-category">
+            <option value="bibliography">参考文献への異議・補足</option>
+            <option value="correction">命題・論証の修正提案</option>
+            <option value="other">その他・ご意見</option>
+          </select>
+        </div>
+        <input
+          type="text"
+          id="admin-comment-target"
+          maxlength="80"
+          placeholder="対象の論題・座標（任意 例：反出生主義 / 座標 1.10）"
+        />
+        <textarea
+          id="admin-comment-body"
+          rows="4"
+          maxlength="1000"
+          required
+          placeholder="参考文献への異議申し立て、出典の誤りのご指摘、追加文献の提案などをご記入ください（最大1000文字）"
+        ></textarea>
+        <button type="submit" class="btn-primary">管理者へコメントを投稿</button>
+        <p class="comment-note">※投稿したコメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
+      </form>`
+    : "";
+
+  return `
+    <section class="doc-section panel-section" id="admin-comments-section">
+      <h3 class="panel-section-title">
+        <span>管理者へのコメント（参考文献への異議・ご意見）</span>
+        <span class="bib-count-pill">${state.adminComments.length}件</span>
+      </h3>
+      <p class="admin-comments-lead">
+        各座標の参考文献に対する異議申し立て、出典の誤りの指摘、またはサイト全体へのご意見などがあればこちらからご連絡ください。
+      </p>
+      ${bodyHtml}
+      ${formHtml}
+    </section>
+  `;
+}
+
 function renderProfilePage() {
   const p = state.profile;
   const hasContent = Boolean(
@@ -882,13 +1051,15 @@ function renderProfilePage() {
     ? `<button type="button" class="admin-action-btn js-open-profile-edit">プロフィールを編集</button>`
     : "";
 
+  const adminCommentsHtml = renderAdminCommentsSection();
+
   if (!hasContent) {
     els.profileContent.innerHTML = `
       <header class="doc-header">
         <div class="doc-header-row">
           <div>
             <h2>管理者プロフィール</h2>
-            <p class="doc-lead">このサイトの運営者情報</p>
+            <p class="doc-lead">このサイトの運営者情報・管理者への連絡欄</p>
           </div>
           ${editBtnHtml}
         </div>
@@ -900,6 +1071,7 @@ function renderProfilePage() {
             : "管理者のプロフィールはまだ登録されていません。"
         }
       </div>
+      ${adminCommentsHtml}
       <div class="doc-footer-actions">
         <button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button>
       </div>
@@ -963,6 +1135,7 @@ function renderProfilePage() {
     ${interestsHtml}
     ${linksHtml}
     ${contactHtml}
+    ${adminCommentsHtml}
 
     <div class="doc-footer-actions">
       <button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button>
@@ -1660,6 +1833,10 @@ document.addEventListener("click", (e) => {
     switchPage("explorer");
     return;
   }
+  if (e.target.closest(".js-go-profile")) {
+    switchPage("profile");
+    return;
+  }
   if (e.target.closest(".js-open-profile-edit")) {
     openProfileDialog();
   }
@@ -1762,6 +1939,128 @@ els.profileForm.addEventListener("submit", async (e) => {
     console.error(err);
     els.profileError.textContent = "保存に失敗しました。Firestoreのルール（siteMeta）を確認してください。";
     els.profileError.hidden = false;
+  }
+});
+
+// 管理者へのコメント（プロフィールページ内）の操作
+els.profileContent.addEventListener("click", async (e) => {
+  const editBtn = e.target.closest(".js-edit-admin-comment");
+  if (editBtn) {
+    const target = state.adminComments.find((c) => c.id === editBtn.dataset.id);
+    if (!isCommentOwner(target)) return;
+    state.editingAdminCommentId = target.id;
+    renderProfilePage();
+    return;
+  }
+
+  if (e.target.closest(".js-cancel-edit-admin-comment")) {
+    state.editingAdminCommentId = null;
+    renderProfilePage();
+    return;
+  }
+
+  const delBtn = e.target.closest(".js-delete-admin-comment");
+  if (delBtn && db) {
+    const target = state.adminComments.find((c) => c.id === delBtn.dataset.id);
+    if (!target || (!isCommentOwner(target) && !state.isAdmin)) return;
+    if (!confirm("このコメントを削除しますか？")) return;
+    try {
+      await deleteDoc(doc(db, "adminComments", target.id));
+      if (state.editingAdminCommentId === target.id) {
+        state.editingAdminCommentId = null;
+      }
+      await loadAdminComments();
+    } catch (err) {
+      console.error(err);
+      alert("コメントの削除に失敗しました。");
+    }
+  }
+});
+
+els.profileContent.addEventListener("submit", async (e) => {
+  // 管理者へのコメントの編集保存（本人のみ）
+  if (e.target.classList.contains("js-admin-comment-edit-form")) {
+    e.preventDefault();
+    if (!db) return;
+
+    const commentId = e.target.dataset.id;
+    const target = state.adminComments.find((c) => c.id === commentId);
+    if (!isCommentOwner(target)) return;
+
+    const author = e.target.elements.author.value.trim() || "匿名";
+    const category = e.target.elements.category.value;
+    const targetRef = e.target.elements.targetRef.value.trim();
+    const body = e.target.elements.body.value.trim();
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (!body) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "保存中...";
+
+    try {
+      await updateDoc(doc(db, "adminComments", commentId), {
+        author,
+        category,
+        targetRef,
+        body,
+        updatedAt: serverTimestamp()
+      });
+      state.editingAdminCommentId = null;
+      await loadAdminComments();
+    } catch (err) {
+      console.error(err);
+      alert("コメントの更新に失敗しました。文字数（1000文字以内）や通信状況を確認してください。");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "変更を保存";
+    }
+    return;
+  }
+
+  // 管理者へのコメントの新規投稿
+  if (e.target.id === "admin-comment-add-form") {
+    e.preventDefault();
+    if (!db) return;
+
+    const authorInput = document.getElementById("admin-comment-author");
+    const categoryInput = document.getElementById("admin-comment-category");
+    const targetInput = document.getElementById("admin-comment-target");
+    const bodyInput = document.getElementById("admin-comment-body");
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    const author = authorInput.value.trim() || "匿名";
+    const category = categoryInput.value;
+    const targetRef = targetInput.value.trim();
+    const body = bodyInput.value.trim();
+    if (!body) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "送信中...";
+
+    try {
+      const uid = await ensureSignedInUid();
+      await addDoc(collection(db, "adminComments"), {
+        category,
+        targetRef,
+        author,
+        body,
+        authorUid: uid,
+        createdAt: serverTimestamp()
+      });
+      bodyInput.value = "";
+      targetInput.value = "";
+      await loadAdminComments();
+    } catch (err) {
+      console.error(err);
+      if (err?.code === "auth/operation-not-allowed" || err?.code === "auth/admin-restricted-operation") {
+        alert("Firebase Authentication で「匿名」ログインを有効にしてください。");
+      } else {
+        alert("コメントの投稿に失敗しました。Firestoreのルール（adminComments）や文字数を確認してください。");
+      }
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "管理者へコメントを投稿";
+    }
   }
 });
 
@@ -2153,7 +2452,7 @@ els.comparePanel.addEventListener("click", async (e) => {
     return;
   }
 
-  // コメントのインライン編集開始（本人のみ）
+  // 命題コメントのインライン編集開始（本人のみ）
   const editCommentBtn = e.target.closest(".js-edit-comment");
   if (editCommentBtn) {
     const target = state.comments.find((c) => c.id === editCommentBtn.dataset.id);
@@ -2163,14 +2462,13 @@ els.comparePanel.addEventListener("click", async (e) => {
     return;
   }
 
-  // コメント編集キャンセル
   if (e.target.closest(".js-cancel-edit-comment")) {
     state.editingCommentId = null;
     renderComparePanel();
     return;
   }
 
-  // コメント削除（本人または管理者）
+  // 命題コメント削除（本人または管理者）
   const delCommentBtn = e.target.closest(".js-delete-comment");
   if (delCommentBtn && db) {
     const target = state.comments.find((c) => c.id === delCommentBtn.dataset.id);
@@ -2218,7 +2516,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
     return;
   }
 
-  // コメントの編集保存（本人のみ）
+  // 命題コメントの編集保存（本人のみ）
   if (e.target.classList.contains("js-comment-edit-form")) {
     e.preventDefault();
     if (!db) return;
@@ -2255,7 +2553,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
     return;
   }
 
-  // コメントの新規投稿（未ログイン時は自動で匿名認証を実行）
+  // 命題コメントの新規投稿
   if (e.target.id === "comment-add-form") {
     e.preventDefault();
     if (!db || !state.selectedCoord) return;
@@ -2313,7 +2611,7 @@ async function init() {
     });
   }
 
-  await Promise.all([loadProfile(), loadTopics()]);
+  await Promise.all([loadProfile(), loadTopics(), loadAdminComments()]);
 
   const { page, topicId, coordToken } = parseUrlHashTokens();
   state.page = page;

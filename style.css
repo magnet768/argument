@@ -1771,3 +1771,49 @@ body.is-detail-view .detail-pager {
   font-size: 0.74rem;
   color: var(--text-muted);
 }
+
+/* === 管理者へのコメント欄（プロフィールページ内） === */
+.admin-comments-lead {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.admin-comment-cat {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-right: 5px;
+}
+
+.admin-comment-cat.is-bibliography {
+  background: var(--minus-soft);
+  color: var(--minus-main);
+  border: 1px solid var(--minus-border);
+}
+
+.admin-comment-cat.is-correction {
+  background: var(--plus-soft);
+  color: var(--plus-main);
+  border: 1px solid var(--plus-border);
+}
+
+.admin-comment-cat.is-other {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.admin-comment-target {
+  display: inline-block;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 5px;
+  margin-bottom: 6px;
+}
