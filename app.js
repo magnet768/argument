@@ -22,7 +22,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 
-// data.js に定義されている初期データを取り出す
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
 
@@ -62,7 +61,7 @@ if (isFirebaseConfigured) {
 
 // === 2. アプリケーション状態 ===
 const state = {
-  page: "explorer",       // "explorer" | "guide" | "profile"
+  page: "explorer",
   drawerOpen: false,
   profile: { ...DEFAULT_PROFILE },
   adminComments: [],
@@ -75,11 +74,11 @@ const state = {
   stagesInDb: false,
   arguments: [],
   stage: "1",
-  mode: "plus",           // "plus" | "minus" | "split"
+  mode: "plus",
   selectedCoord: "",
   query: "",
   history: [],
-  currentUid: null,       // 匿名ユーザーまたは管理者の固有UID
+  currentUid: null,
   isAdmin: false,
   comments: [],
   commentsLoading: false,
@@ -94,7 +93,6 @@ const state = {
 
 let referencedByMap = new Map();
 
-// DOM 参照
 const els = {
   menuOpenBtn: document.getElementById("menu-open-btn"),
   menuCloseBtn: document.getElementById("menu-close-btn"),
@@ -325,14 +323,10 @@ function commentDoc(commentId, topicId = state.currentTopicId) {
 
 function rebuildReferencedByMap() {
   referencedByMap = new Map();
-  for (const item of state.arguments) {
-    referencedByMap.set(item.coord, []);
-  }
+  for (const item of state.arguments) referencedByMap.set(item.coord, []);
   for (const item of state.arguments) {
     for (const refCoord of item.refs) {
-      if (referencedByMap.has(refCoord)) {
-        referencedByMap.get(refCoord).push(item.coord);
-      }
+      if (referencedByMap.has(refCoord)) referencedByMap.get(refCoord).push(item.coord);
     }
   }
 }
@@ -350,13 +344,8 @@ function isCommentOwner(comment) {
 }
 
 function showNotice(message) {
-  if (!message) {
-    els.statusNotice.hidden = true;
-    els.statusNotice.textContent = "";
-    return;
-  }
-  els.statusNotice.hidden = false;
-  els.statusNotice.textContent = message;
+  els.statusNotice.hidden = !message;
+  els.statusNotice.textContent = message || "";
 }
 
 function formatDate(ts) {
@@ -375,12 +364,9 @@ function formatDate(ts) {
 function getCurrentHash() {
   if (state.page === "guide") return "#guide";
   if (state.page === "profile") return "#profile";
-
   const topicId = state.currentTopicId;
   if (!topicId) return "";
-  if (!state.selectedCoord) {
-    return `#${encodeURIComponent(topicId)}`;
-  }
+  if (!state.selectedCoord) return `#${encodeURIComponent(topicId)}`;
   const prefix = state.mode === "plus" ? "+" : state.mode === "minus" ? "-" : "";
   return `#${encodeURIComponent(topicId)}/${prefix}${state.selectedCoord}`;
 }
@@ -390,27 +376,19 @@ function syncUrlHash() {
   if (!hash) return;
   try {
     history.replaceState(history.state, "", hash);
-  } catch {
-    // 制限環境を無視
-  }
+  } catch {}
 }
 
 function parseUrlHashTokens() {
   const raw = decodeURIComponent(window.location.hash.replace(/^#/, "")).trim();
   if (!raw) return { page: "explorer", topicId: null, coordToken: "" };
-
   if (raw === "guide") return { page: "guide", topicId: null, coordToken: "" };
   if (raw === "profile") return { page: "profile", topicId: null, coordToken: "" };
-
   if (raw.includes("/")) {
     const [maybeTopic, ...rest] = raw.split("/");
     return { page: "explorer", topicId: maybeTopic.trim(), coordToken: rest.join("/").trim() };
   }
-
-  if (findTopic(raw)) {
-    return { page: "explorer", topicId: raw, coordToken: "" };
-  }
-
+  if (findTopic(raw)) return { page: "explorer", topicId: raw, coordToken: "" };
   return { page: "explorer", topicId: null, coordToken: raw };
 }
 
@@ -418,7 +396,6 @@ function applyCoordToken(coordToken) {
   if (!coordToken) return false;
   let mode = state.mode;
   let coord = coordToken;
-
   if (coordToken.startsWith("+")) {
     mode = "plus";
     coord = coordToken.slice(1);
@@ -426,10 +403,8 @@ function applyCoordToken(coordToken) {
     mode = "minus";
     coord = coordToken.slice(1);
   }
-
   const found = findArg(coord);
   if (!found) return false;
-
   state.stage = found.stage;
   state.mode = mode;
   state.selectedCoord = found.coord;
@@ -466,8 +441,7 @@ function closeNavDrawer() {
 }
 
 function applyDetailBodyClass() {
-  const activeDetail = state.page === "explorer" && state.detailOpen;
-  document.body.classList.toggle("is-detail-view", activeDetail);
+  document.body.classList.toggle("is-detail-view", state.page === "explorer" && state.detailOpen);
 }
 
 function switchPage(nextPage) {
@@ -482,19 +456,14 @@ function switchPage(nextPage) {
   }
   renderAll();
   window.scrollTo({ top: 0, behavior: "instant" });
-  if (nextPage === "profile") {
-    loadAdminComments();
-  }
+  if (nextPage === "profile") loadAdminComments();
 }
 
 function openDetailView(coord, { pushBrowserHistory = true } = {}) {
   const item = findArg(coord);
   if (!item) return;
-
   const wasOpen = state.detailOpen;
-  if (!wasOpen) {
-    state.savedListScrollY = window.scrollY;
-  }
+  if (!wasOpen) state.savedListScrollY = window.scrollY;
 
   const coordChanged = state.selectedCoord !== coord;
   state.page = "explorer";
@@ -517,10 +486,7 @@ function openDetailView(coord, { pushBrowserHistory = true } = {}) {
   renderList();
   renderComparePanel();
   window.scrollTo({ top: 0, behavior: "instant" });
-
-  if (coordChanged || !wasOpen) {
-    loadCommentsForCoord(coord);
-  }
+  if (coordChanged || !wasOpen) loadCommentsForCoord(coord);
 }
 
 function closeDetailView({ restoreScroll = true } = {}) {
@@ -531,18 +497,13 @@ function closeDetailView({ restoreScroll = true } = {}) {
   applyDetailBodyClass();
   renderAll();
   if (restoreScroll) {
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: state.savedListScrollY, behavior: "instant" });
-    });
+    requestAnimationFrame(() => window.scrollTo({ top: state.savedListScrollY, behavior: "instant" }));
   }
 }
 
 function requestCloseDetailView() {
-  if (state.pushedDetailHistory) {
-    history.back();
-  } else {
-    closeDetailView({ restoreScroll: true });
-  }
+  if (state.pushedDetailHistory) history.back();
+  else closeDetailView({ restoreScroll: true });
 }
 
 // === 5. Firestore データ操作 ===
@@ -564,11 +525,7 @@ async function loadProfile() {
   }
   try {
     const snap = await getDoc(doc(db, "siteMeta", "profile"));
-    if (snap.exists()) {
-      state.profile = normalizeProfile(snap.data());
-    } else {
-      state.profile = { ...DEFAULT_PROFILE };
-    }
+    state.profile = snap.exists() ? normalizeProfile(snap.data()) : { ...DEFAULT_PROFILE };
   } catch (err) {
     console.error(err);
     state.profile = { ...DEFAULT_PROFILE };
@@ -582,21 +539,13 @@ async function loadAdminComments() {
     renderProfilePage();
     return;
   }
-
   state.adminCommentsLoading = true;
   renderProfilePage();
-
   try {
     const snap = await getDocs(collection(db, "adminComments"));
     const list = [];
-    snap.forEach((docSnap) => {
-      list.push({ id: docSnap.id, ...docSnap.data() });
-    });
-    list.sort((a, b) => {
-      const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-      const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-      return tb - ta;
-    });
+    snap.forEach((docSnap) => list.push({ id: docSnap.id, ...docSnap.data() }));
+    list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     state.adminComments = list;
   } catch (err) {
     console.error(err);
@@ -613,7 +562,6 @@ async function loadTopics() {
     state.topicsInDb = false;
     return;
   }
-
   try {
     const snap = await getDocs(collection(db, "topics"));
     if (snap.empty) {
@@ -621,12 +569,8 @@ async function loadTopics() {
       state.topicsInDb = false;
     } else {
       const rows = [];
-      snap.forEach((docSnap) => {
-        rows.push(normalizeTopic({ id: docSnap.id, ...docSnap.data() }));
-      });
-      state.topics = rows.sort(
-        (a, b) => a.order - b.order || compareNatural(a.id, b.id)
-      );
+      snap.forEach((docSnap) => rows.push(normalizeTopic({ id: docSnap.id, ...docSnap.data() })));
+      state.topics = rows.sort((a, b) => a.order - b.order || compareNatural(a.id, b.id));
       state.topicsInDb = true;
     }
   } catch (err) {
@@ -638,23 +582,18 @@ async function loadTopics() {
 
 async function ensureTopicsSeededInDb() {
   if (!db || !state.isAdmin || state.topicsInDb) return;
-  await setDoc(doc(db, "topics", DEFAULT_TOPIC.id), {
-    ...DEFAULT_TOPIC,
-    updatedAt: serverTimestamp()
-  });
+  await setDoc(doc(db, "topics", DEFAULT_TOPIC.id), { ...DEFAULT_TOPIC, updatedAt: serverTimestamp() });
   state.topicsInDb = true;
 }
 
 async function loadStages() {
   const legacy = isLegacyTopic(state.currentTopicId);
   const fallback = legacy ? getDefaultStagesList() : [];
-
   if (!db) {
     state.stages = fallback;
     state.stagesInDb = false;
     return;
   }
-
   try {
     const snap = await getDocs(stagesCollection());
     if (snap.empty) {
@@ -662,9 +601,7 @@ async function loadStages() {
       state.stagesInDb = false;
     } else {
       const rows = [];
-      snap.forEach((docSnap) => {
-        rows.push(normalizeStage({ id: docSnap.id, ...docSnap.data() }));
-      });
+      snap.forEach((docSnap) => rows.push(normalizeStage({ id: docSnap.id, ...docSnap.data() })));
       state.stages = rows.sort((a, b) => compareNatural(a.id, b.id));
       state.stagesInDb = true;
     }
@@ -677,19 +614,14 @@ async function loadStages() {
 
 async function ensureStagesSeededInDb() {
   if (!db || !state.isAdmin || state.stagesInDb || !isLegacyTopic()) return;
-  const defaults = getDefaultStagesList();
-  for (const st of defaults) {
-    await setDoc(stageDoc(st.id), {
-      ...st,
-      updatedAt: serverTimestamp()
-    });
+  for (const st of getDefaultStagesList()) {
+    await setDoc(stageDoc(st.id), { ...st, updatedAt: serverTimestamp() });
   }
   state.stagesInDb = true;
 }
 
 async function loadArguments() {
   const legacy = isLegacyTopic(state.currentTopicId);
-
   if (!db) {
     state.arguments = legacy
       ? DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord))
@@ -698,14 +630,11 @@ async function loadArguments() {
     showNotice("firebase-config.js が未設定のため、ローカルの初期データのみで閲覧モード表示しています。");
     return;
   }
-
   try {
     const snap = await getDocs(argumentsCollection());
     if (snap.empty) {
       if (legacy) {
-        state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) =>
-          compareNatural(a.coord, b.coord)
-        );
+        state.arguments = DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord));
         showNotice("データベースに命題が未登録です。左上のメニューから管理者ログイン後、「初期データをDBへ投入」を押すと初期データが登録されます。");
       } else {
         state.arguments = [];
@@ -714,9 +643,7 @@ async function loadArguments() {
       rebuildReferencedByMap();
     } else {
       const rows = [];
-      snap.forEach((docSnap) => {
-        rows.push(normalizeArg({ coord: docSnap.id, ...docSnap.data() }));
-      });
+      snap.forEach((docSnap) => rows.push(normalizeArg({ coord: docSnap.id, ...docSnap.data() })));
       state.arguments = rows.sort((a, b) => compareNatural(a.coord, b.coord));
       rebuildReferencedByMap();
       showNotice("");
@@ -739,24 +666,16 @@ async function loadCommentsForCoord(coord) {
     renderComparePanel();
     return;
   }
-
   const targetTopicId = state.currentTopicId;
   state.commentsLoading = true;
   state.editingCommentId = null;
   renderComparePanel();
-
   try {
     const q = query(commentsCollection(targetTopicId), where("coord", "==", coord));
     const snap = await getDocs(q);
     const list = [];
-    snap.forEach((docSnap) => {
-      list.push({ id: docSnap.id, ...docSnap.data() });
-    });
-    list.sort((a, b) => {
-      const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-      const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-      return tb - ta;
-    });
+    snap.forEach((docSnap) => list.push({ id: docSnap.id, ...docSnap.data() }));
+    list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
     if (state.currentTopicId === targetTopicId && state.selectedCoord === coord) {
       state.comments = list;
     }
@@ -771,29 +690,24 @@ async function loadCommentsForCoord(coord) {
 
 async function switchTopic(topicId) {
   if (!findTopic(topicId)) return;
-
   state.currentTopicId = topicId;
   state.history = [];
   state.query = "";
   els.searchInput.value = "";
   state.comments = [];
   state.editingCommentId = null;
-
   if (state.detailOpen) {
     state.detailOpen = false;
     state.pushedDetailHistory = false;
     applyDetailBodyClass();
   }
-
   await Promise.all([loadStages(), loadArguments()]);
-
   state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
   const firstInStage =
     state.stage !== "all"
       ? state.arguments.find((a) => a.stage === state.stage) || state.arguments[0]
       : state.arguments[0];
   state.selectedCoord = firstInStage ? firstInStage.coord : "";
-
   renderAll();
   await loadCommentsForCoord(state.selectedCoord);
 }
@@ -801,30 +715,19 @@ async function switchTopic(topicId) {
 async function seedInitialDataToFirestore() {
   if (!db || !state.isAdmin || !isLegacyTopic()) return;
   const defaultStages = getDefaultStagesList();
-  if (
-    !confirm(
-      `data.js の初期データ（水準 ${defaultStages.length}件・命題 ${DEFAULT_ARGUMENTS.length}件）をデータベースへ書き込みますか？（同じ番号・座標が存在する場合は上書きされます）`
-    )
-  ) {
+  if (!confirm(`data.js の初期データ（水準 ${defaultStages.length}件・命題 ${DEFAULT_ARGUMENTS.length}件）をデータベースへ書き込みますか？（同じ番号・座標が存在する場合は上書きされます）`)) {
     return;
   }
-
   els.seedDbBtn.disabled = true;
   els.seedDbBtn.textContent = "投入中...";
   try {
     await ensureTopicsSeededInDb();
     for (const st of defaultStages) {
-      await setDoc(stageDoc(st.id), {
-        ...st,
-        updatedAt: serverTimestamp()
-      });
+      await setDoc(stageDoc(st.id), { ...st, updatedAt: serverTimestamp() });
     }
     for (const raw of DEFAULT_ARGUMENTS) {
       const item = normalizeArg(raw);
-      await setDoc(argumentDoc(item.coord), {
-        ...item,
-        updatedAt: serverTimestamp()
-      });
+      await setDoc(argumentDoc(item.coord), { ...item, updatedAt: serverTimestamp() });
     }
     await Promise.all([loadTopics(), loadStages(), loadArguments()]);
     renderAll();
@@ -842,25 +745,13 @@ async function seedInitialDataToFirestore() {
 function getFilteredArguments() {
   const q = state.query.trim().toLowerCase();
   return state.arguments.filter((item) => {
-    if (state.stage !== "all" && item.stage !== state.stage) {
-      return false;
-    }
+    if (state.stage !== "all" && item.stage !== state.stage) return false;
     if (!q) return true;
     const bibText = item.bibliography.map((b) => `${b.citation} ${b.note}`).join(" ");
-    const haystack = [
-      item.coord,
-      `+${item.coord}`,
-      `-${item.coord}`,
-      item.topic,
-      item.plusTitle,
-      item.plusBody,
-      item.minusTitle,
-      item.minusBody,
-      bibText
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(q);
+    return [
+      item.coord, `+${item.coord}`, `-${item.coord}`, item.topic,
+      item.plusTitle, item.plusBody, item.minusTitle, item.minusBody, bibText
+    ].join(" ").toLowerCase().includes(q);
   });
 }
 
@@ -872,11 +763,7 @@ function populateStageSelect(selectedId) {
   els.argStage.innerHTML = state.stages
     .map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`)
     .join("");
-  if (selectedId && findStage(selectedId)) {
-    els.argStage.value = String(selectedId);
-  } else {
-    els.argStage.value = state.stages[0].id;
-  }
+  els.argStage.value = selectedId && findStage(selectedId) ? String(selectedId) : state.stages[0].id;
 }
 
 function renderPageVisibility() {
@@ -884,17 +771,11 @@ function renderPageVisibility() {
   const isGuide = state.page === "guide";
   const isProfile = state.page === "profile";
 
-  els.drawerNavButtons.forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.page === state.page);
-  });
-
+  els.drawerNavButtons.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.page === state.page));
   els.topTopicControls.hidden = !isExplorer;
   els.topPageLabel.hidden = isExplorer;
-  if (isGuide) {
-    els.topPageLabel.textContent = "このサイトの使い方";
-  } else if (isProfile) {
-    els.topPageLabel.textContent = "管理者プロフィール";
-  }
+  if (isGuide) els.topPageLabel.textContent = "このサイトの使い方";
+  else if (isProfile) els.topPageLabel.textContent = "管理者プロフィール";
 
   els.explorerHeaderPanel.hidden = !isExplorer;
   els.explorerView.hidden = !isExplorer;
@@ -902,20 +783,14 @@ function renderPageVisibility() {
   els.profileView.hidden = !isProfile;
 
   const topic = getCurrentTopic();
-  if (isGuide) {
-    document.title = `使い方 | ${topic.title}`;
-  } else if (isProfile) {
-    document.title = `プロフィール | ${topic.title}`;
-  } else {
-    document.title = topic.title;
-  }
+  document.title = isGuide ? `使い方 | ${topic.title}` : isProfile ? `プロフィール | ${topic.title}` : topic.title;
 }
 
 function renderAdminCommentsSection() {
   const catMap = {
-    bibliography: { text: "参考文献への異議・補足", cls: "is-bibliography" },
+    bibliography: { text: "参考文献の修正提案", cls: "is-bibliography" },
     correction: { text: "命題・論証の修正提案", cls: "is-correction" },
-    other: { text: "その他・ご意見", cls: "is-other" }
+    other: { text: "サイト全体へのご意見・その他", cls: "is-other" }
   };
 
   let bodyHtml = "";
@@ -930,35 +805,20 @@ function renderAdminCommentsSection() {
       .map((c) => {
         const cat = catMap[c.category] || catMap.other;
         const owner = isCommentOwner(c);
-        const canEdit = owner;
         const canDelete = owner || state.isAdmin;
-        const isEditing = canEdit && state.editingAdminCommentId === c.id;
-
-        if (isEditing) {
+        if (owner && state.editingAdminCommentId === c.id) {
           return `
             <li class="comment-item">
               <form class="mini-form js-admin-comment-edit-form" data-id="${escapeHtml(c.id)}">
                 <div class="form-grid-2">
-                  <input
-                    type="text"
-                    name="author"
-                    maxlength="40"
-                    value="${escapeHtml(c.author === "匿名" ? "" : c.author || "")}"
-                    placeholder="お名前（空欄で匿名）"
-                  />
+                  <input type="text" name="author" maxlength="40" value="${escapeHtml(c.author === "匿名" ? "" : c.author || "")}" placeholder="お名前（空欄で匿名）" />
                   <select name="category">
-                    <option value="bibliography" ${c.category === "bibliography" ? "selected" : ""}>参考文献への異議・補足</option>
+                    <option value="bibliography" ${c.category === "bibliography" ? "selected" : ""}>参考文献の修正提案</option>
                     <option value="correction" ${c.category === "correction" ? "selected" : ""}>命題・論証の修正提案</option>
-                    <option value="other" ${c.category === "other" ? "selected" : ""}>その他・ご意見</option>
+                    <option value="other" ${c.category === "other" ? "selected" : ""}>サイト全体へのご意見・その他</option>
                   </select>
                 </div>
-                <input
-                  type="text"
-                  name="targetRef"
-                  maxlength="80"
-                  value="${escapeHtml(c.targetRef || "")}"
-                  placeholder="対象の論題・座標（任意 例：反出生主義 / 座標 1.10）"
-                />
+                <input type="text" name="targetRef" maxlength="80" value="${escapeHtml(c.targetRef || "")}" placeholder="対象の論題・座標（任意 例：反出生主義 / 座標 1.10）" />
                 <textarea name="body" rows="4" maxlength="1000" required>${escapeHtml(c.body)}</textarea>
                 <div class="comment-edit-actions">
                   <button type="button" class="btn-secondary js-cancel-edit-admin-comment">キャンセル</button>
@@ -967,7 +827,6 @@ function renderAdminCommentsSection() {
               </form>
             </li>`;
         }
-
         return `
           <li class="comment-item">
             <div class="comment-meta">
@@ -978,16 +837,8 @@ function renderAdminCommentsSection() {
                 ${c.updatedAt ? `<span class="comment-edited-tag">（編集済み）</span>` : ""}
               </div>
               <div class="comment-actions">
-                ${
-                  canEdit
-                    ? `<button type="button" class="btn-xs-edit js-edit-admin-comment" data-id="${escapeHtml(c.id)}">編集</button>`
-                    : ""
-                }
-                ${
-                  canDelete
-                    ? `<button type="button" class="btn-xs-danger js-delete-admin-comment" data-id="${escapeHtml(c.id)}">削除</button>`
-                    : ""
-                }
+                ${owner ? `<button type="button" class="btn-xs-edit js-edit-admin-comment" data-id="${escapeHtml(c.id)}">編集</button>` : ""}
+                ${canDelete ? `<button type="button" class="btn-xs-danger js-delete-admin-comment" data-id="${escapeHtml(c.id)}">削除</button>` : ""}
               </div>
             </div>
             ${c.targetRef ? `<div class="admin-comment-target">対象：${escapeHtml(c.targetRef)}</div>` : ""}
@@ -1003,24 +854,13 @@ function renderAdminCommentsSection() {
         <div class="form-grid-2">
           <input type="text" id="admin-comment-author" maxlength="40" placeholder="お名前（空欄で匿名）" />
           <select id="admin-comment-category">
-            <option value="bibliography">参考文献への異議・補足</option>
+            <option value="bibliography">参考文献の修正提案</option>
             <option value="correction">命題・論証の修正提案</option>
-            <option value="other">その他・ご意見</option>
+            <option value="other">サイト全体へのご意見・その他</option>
           </select>
         </div>
-        <input
-          type="text"
-          id="admin-comment-target"
-          maxlength="80"
-          placeholder="対象の論題・座標（任意 例：反出生主義 / 座標 1.10）"
-        />
-        <textarea
-          id="admin-comment-body"
-          rows="4"
-          maxlength="1000"
-          required
-          placeholder="参考文献への異議申し立て、出典の誤りのご指摘、追加文献の提案などをご記入ください（最大1000文字）"
-        ></textarea>
+        <input type="text" id="admin-comment-target" maxlength="80" placeholder="対象の論題・座標（任意 例：反出生主義 / 座標 1.10）" />
+        <textarea id="admin-comment-body" rows="4" maxlength="1000" required placeholder="参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などをご記入ください（最大1000文字）"></textarea>
         <button type="submit" class="btn-primary">管理者へコメントを投稿</button>
         <p class="comment-note">※投稿したコメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
       </form>`
@@ -1029,11 +869,11 @@ function renderAdminCommentsSection() {
   return `
     <section class="doc-section panel-section" id="admin-comments-section">
       <h3 class="panel-section-title">
-        <span>管理者へのコメント（参考文献への異議・ご意見）</span>
+        <span>管理者へのコメント（修正提案・サイト全体へのご意見）</span>
         <span class="bib-count-pill">${state.adminComments.length}件</span>
       </h3>
       <p class="admin-comments-lead">
-        各座標の参考文献に対する異議申し立て、出典の誤りの指摘、またはサイト全体へのご意見などがあればこちらからご連絡ください。
+        各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などがあればこちらからご連絡ください。
       </p>
       ${bodyHtml}
       ${formHtml}
@@ -1043,14 +883,10 @@ function renderAdminCommentsSection() {
 
 function renderProfilePage() {
   const p = state.profile;
-  const hasContent = Boolean(
-    p.name || p.role || p.bio || p.interests.length > 0 || p.links.length > 0 || p.contact
-  );
-
+  const hasContent = Boolean(p.name || p.role || p.bio || p.interests.length > 0 || p.links.length > 0 || p.contact);
   const editBtnHtml = state.isAdmin
     ? `<button type="button" class="admin-action-btn js-open-profile-edit">プロフィールを編集</button>`
     : "";
-
   const adminCommentsHtml = renderAdminCommentsSection();
 
   if (!hasContent) {
@@ -1065,11 +901,7 @@ function renderProfilePage() {
         </div>
       </header>
       <div class="empty-state">
-        ${
-          state.isAdmin
-            ? "プロフィールはまだ登録されていません。右上の「プロフィールを編集」から作成できます。"
-            : "管理者のプロフィールはまだ登録されていません。"
-        }
+        ${state.isAdmin ? "プロフィールはまだ登録されていません。右上の「プロフィールを編集」から作成できます。" : "管理者のプロフィールはまだ登録されていません。"}
       </div>
       ${adminCommentsHtml}
       <div class="doc-footer-actions">
@@ -1079,41 +911,16 @@ function renderProfilePage() {
     return;
   }
 
-  const interestsHtml =
-    p.interests.length > 0
-      ? `
-        <section class="doc-section">
-          <h3>関心領域・テーマ</h3>
-          <div class="interest-tags">
-            ${p.interests.map((tag) => `<span class="interest-tag">${escapeHtml(tag)}</span>`).join("")}
-          </div>
-        </section>`
-      : "";
+  const interestsHtml = p.interests.length > 0
+    ? `<section class="doc-section"><h3>関心領域・テーマ</h3><div class="interest-tags">${p.interests.map((tag) => `<span class="interest-tag">${escapeHtml(tag)}</span>`).join("")}</div></section>`
+    : "";
 
-  const linksHtml =
-    p.links.length > 0
-      ? `
-        <section class="doc-section">
-          <h3>外部リンク</h3>
-          <ul class="profile-links">
-            ${p.links
-              .map(
-                (l) => `
-                <li class="profile-link-item">
-                  <a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)} ↗</a>
-                </li>`
-              )
-              .join("")}
-          </ul>
-        </section>`
-      : "";
+  const linksHtml = p.links.length > 0
+    ? `<section class="doc-section"><h3>外部リンク</h3><ul class="profile-links">${p.links.map((l) => `<li class="profile-link-item"><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)} ↗</a></li>`).join("")}</ul></section>`
+    : "";
 
   const contactHtml = p.contact
-    ? `
-      <section class="doc-section">
-        <h3>連絡先・メモ</h3>
-        <p class="profile-bio">${escapeHtml(p.contact)}</p>
-      </section>`
+    ? `<section class="doc-section"><h3>連絡先・メモ</h3><p class="profile-bio">${escapeHtml(p.contact)}</p></section>`
     : "";
 
   els.profileContent.innerHTML = `
@@ -1126,17 +933,11 @@ function renderProfilePage() {
         ${editBtnHtml}
       </div>
     </header>
-
-    ${
-      p.bio
-        ? `<section class="doc-section"><h3>自己紹介</h3><p class="profile-bio">${escapeHtml(p.bio)}</p></section>`
-        : ""
-    }
+    ${p.bio ? `<section class="doc-section"><h3>自己紹介</h3><p class="profile-bio">${escapeHtml(p.bio)}</p></section>` : ""}
     ${interestsHtml}
     ${linksHtml}
     ${contactHtml}
     ${adminCommentsHtml}
-
     <div class="doc-footer-actions">
       <button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button>
     </div>
@@ -1149,7 +950,6 @@ function renderTopicBar() {
     .map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.title)}</option>`)
     .join("");
   els.topicSelect.value = topic.id;
-
   els.siteTitle.textContent = topic.title;
   els.siteSubtitle.textContent = topic.subtitle;
   els.siteSubtitle.hidden = !topic.subtitle;
@@ -1172,16 +972,8 @@ function renderTabs() {
     ...state.stages.map((s) => ({ id: s.id, label: s.label })),
     { id: "all", label: `全${state.arguments.length}命題` }
   ];
-
   els.stageTabs.innerHTML = tabDefs
-    .map(
-      (t) => `
-      <button
-        type="button"
-        class="tab-btn ${state.stage === t.id ? "is-active" : ""}"
-        data-stage="${escapeHtml(t.id)}"
-      >${escapeHtml(t.label)}</button>`
-    )
+    .map((t) => `<button type="button" class="tab-btn ${state.stage === t.id ? "is-active" : ""}" data-stage="${escapeHtml(t.id)}">${escapeHtml(t.label)}</button>`)
     .join("");
 }
 
@@ -1207,12 +999,10 @@ function renderStageBanner() {
     els.stageBanner.innerHTML = "";
     return;
   }
-
   const topic = getCurrentTopic();
   const editBtnHtml = state.isAdmin
     ? `<button type="button" class="banner-edit-btn js-edit-stage" data-stage-id="${escapeHtml(info.id)}">この水準を編集</button>`
     : "";
-
   const boxesHtml = `
     <div class="banner-box is-plus">
       <div class="banner-head-row">
@@ -1228,15 +1018,11 @@ function renderStageBanner() {
       <div>${escapeHtml(info.minus)}</div>
     </div>
   `;
-
   const summaryText = state.mode === "minus" ? info.minus : info.plus;
-
   els.stageBanner.innerHTML = `
     <div class="stage-banner-grid">${boxesHtml}</div>
     <details class="stage-banner-accordion">
-      <summary class="stage-banner-summary">
-        <span>基本命題：${escapeHtml(summaryText)}</span>
-      </summary>
+      <summary class="stage-banner-summary"><span>基本命題：${escapeHtml(summaryText)}</span></summary>
       <div class="stage-banner-accordion-body">${boxesHtml}</div>
     </details>
   `;
@@ -1245,10 +1031,7 @@ function renderStageBanner() {
 function renderRefChips(refs, label) {
   if (!refs || refs.length === 0) return "";
   const chips = refs
-    .map(
-      (c) =>
-        `<button type="button" class="ref-chip js-ref-btn" data-ref="${escapeHtml(c)}">±${escapeHtml(c)}</button>`
-    )
+    .map((c) => `<button type="button" class="ref-chip js-ref-btn" data-ref="${escapeHtml(c)}">±${escapeHtml(c)}</button>`)
     .join("");
   return `<div class="ref-row"><span>${escapeHtml(label)}:</span>${chips}</div>`;
 }
@@ -1282,13 +1065,9 @@ function renderList() {
   let html = "";
   for (const [topicHeading, items] of groups.entries()) {
     html += `<div class="topic-group"><h3 class="topic-heading">${escapeHtml(topicHeading)}</h3>`;
-
     for (const item of items) {
       const selectedClass = item.coord === state.selectedCoord ? "is-selected" : "";
-      const bibPill =
-        item.bibliography.length > 0
-          ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>`
-          : "";
+      const bibPill = item.bibliography.length > 0 ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>` : "";
       const refsHtml = renderRefChips(item.refs, "前提命題");
 
       if (state.mode === "split") {
@@ -1317,8 +1096,7 @@ function renderList() {
               </div>
             </div>
             ${refsHtml}
-          </article>
-        `;
+          </article>`;
       } else {
         const isPlus = state.mode === "plus";
         const sign = isPlus ? "+" : "-";
@@ -1335,52 +1113,33 @@ function renderList() {
                 <h4 class="card-title">${escapeHtml(title)}</h4>
                 ${bibPill}
               </div>
-              <button
-                type="button"
-                class="flip-btn js-flip-btn"
-                data-coord="${escapeHtml(item.coord)}"
-                data-target-mode="${oppMode}"
-              >⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button>
+              <button type="button" class="flip-btn js-flip-btn" data-coord="${escapeHtml(item.coord)}" data-target-mode="${oppMode}">⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button>
             </div>
             <p class="card-body">${escapeHtml(body)}</p>
             ${refsHtml}
-          </article>
-        `;
+          </article>`;
       }
     }
-
     html += `</div>`;
   }
-
   els.argList.innerHTML = html;
 }
 
 function renderBibliographySection(item) {
-  const listHtml =
-    item.bibliography.length === 0
-      ? `<p class="empty-muted">この座標に登録された参考文献はまだありません。</p>`
-      : `<ul class="bib-list">${item.bibliography
-          .map((b, idx) => {
-            const href = safeUrl(b.url);
-            return `
-              <li class="bib-item">
-                <div class="bib-item-head">
-                  <span class="bib-citation">${escapeHtml(b.citation)}</span>
-                  ${
-                    state.isAdmin
-                      ? `<button type="button" class="btn-xs-danger js-delete-bib" data-index="${idx}">削除</button>`
-                      : ""
-                  }
-                </div>
-                ${b.note ? `<p class="bib-note">${escapeHtml(b.note)}</p>` : ""}
-                ${
-                  href
-                    ? `<a class="bib-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(href)}</a>`
-                    : ""
-                }
-              </li>`;
-          })
-          .join("")}</ul>`;
+  const listHtml = item.bibliography.length === 0
+    ? `<p class="empty-muted">この座標に登録された参考文献はまだありません。</p>`
+    : `<ul class="bib-list">${item.bibliography.map((b, idx) => {
+        const href = safeUrl(b.url);
+        return `
+          <li class="bib-item">
+            <div class="bib-item-head">
+              <span class="bib-citation">${escapeHtml(b.citation)}</span>
+              ${state.isAdmin ? `<button type="button" class="btn-xs-danger js-delete-bib" data-index="${idx}">削除</button>` : ""}
+            </div>
+            ${b.note ? `<p class="bib-note">${escapeHtml(b.note)}</p>` : ""}
+            ${href ? `<a class="bib-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(href)}</a>` : ""}
+          </li>`;
+      }).join("")}</ul>`;
 
   const adminFormHtml = state.isAdmin
     ? `
@@ -1400,8 +1159,7 @@ function renderBibliographySection(item) {
       </h3>
       ${listHtml}
       ${adminFormHtml}
-    </section>
-  `;
+    </section>`;
 }
 
 function renderCommentsSection(item) {
@@ -1420,67 +1178,47 @@ function renderCommentsSection(item) {
   } else if (state.comments.length === 0) {
     bodyHtml = `<p class="empty-muted">この座標へのコメントはまだありません。</p>`;
   } else {
-    bodyHtml = `<ul class="comment-list">${state.comments
-      .map((c) => {
-        const st = stanceLabelMap[c.stance] || stanceLabelMap.both;
-        const owner = isCommentOwner(c);
-        const canEdit = owner;
-        const canDelete = owner || state.isAdmin;
-        const isEditing = canEdit && state.editingCommentId === c.id;
-
-        if (isEditing) {
-          return `
-            <li class="comment-item">
-              <form class="mini-form js-comment-edit-form" data-id="${escapeHtml(c.id)}">
-                <div class="form-grid-2">
-                  <input
-                    type="text"
-                    name="author"
-                    maxlength="40"
-                    value="${escapeHtml(c.author === "匿名" ? "" : c.author || "")}"
-                    placeholder="お名前（空欄で匿名）"
-                  />
-                  <select name="stance">
-                    <option value="both" ${c.stance === "both" ? "selected" : ""}>座標 ${escapeHtml(item.coord)} 全体</option>
-                    <option value="plus" ${c.stance === "plus" ? "selected" : ""}>+${escapeHtml(item.coord)}（${escapeHtml(topic.plusLabel)}）</option>
-                    <option value="minus" ${c.stance === "minus" ? "selected" : ""}>-${escapeHtml(item.coord)}（${escapeHtml(topic.minusLabel)}）</option>
-                  </select>
-                </div>
-                <textarea name="body" rows="3" maxlength="1000" required>${escapeHtml(c.body)}</textarea>
-                <div class="comment-edit-actions">
-                  <button type="button" class="btn-secondary js-cancel-edit-comment">キャンセル</button>
-                  <button type="submit" class="btn-primary">変更を保存</button>
-                </div>
-              </form>
-            </li>`;
-        }
-
+    bodyHtml = `<ul class="comment-list">${state.comments.map((c) => {
+      const st = stanceLabelMap[c.stance] || stanceLabelMap.both;
+      const owner = isCommentOwner(c);
+      const canDelete = owner || state.isAdmin;
+      if (owner && state.editingCommentId === c.id) {
         return `
           <li class="comment-item">
-            <div class="comment-meta">
-              <div>
-                <span class="comment-stance ${st.cls}">${escapeHtml(st.text)}</span>
-                <span class="comment-author">${escapeHtml(c.author || "匿名")}</span>
-                <span>・${escapeHtml(formatDate(c.createdAt))}</span>
-                ${c.updatedAt ? `<span class="comment-edited-tag">（編集済み）</span>` : ""}
+            <form class="mini-form js-comment-edit-form" data-id="${escapeHtml(c.id)}">
+              <div class="form-grid-2">
+                <input type="text" name="author" maxlength="40" value="${escapeHtml(c.author === "匿名" ? "" : c.author || "")}" placeholder="お名前（空欄で匿名）" />
+                <select name="stance">
+                  <option value="both" ${c.stance === "both" ? "selected" : ""}>座標 ${escapeHtml(item.coord)} 全体</option>
+                  <option value="plus" ${c.stance === "plus" ? "selected" : ""}>+${escapeHtml(item.coord)}（${escapeHtml(topic.plusLabel)}）</option>
+                  <option value="minus" ${c.stance === "minus" ? "selected" : ""}>-${escapeHtml(item.coord)}（${escapeHtml(topic.minusLabel)}）</option>
+                </select>
               </div>
-              <div class="comment-actions">
-                ${
-                  canEdit
-                    ? `<button type="button" class="btn-xs-edit js-edit-comment" data-id="${escapeHtml(c.id)}">編集</button>`
-                    : ""
-                }
-                ${
-                  canDelete
-                    ? `<button type="button" class="btn-xs-danger js-delete-comment" data-id="${escapeHtml(c.id)}">削除</button>`
-                    : ""
-                }
+              <textarea name="body" rows="3" maxlength="1000" required>${escapeHtml(c.body)}</textarea>
+              <div class="comment-edit-actions">
+                <button type="button" class="btn-secondary js-cancel-edit-comment">キャンセル</button>
+                <button type="submit" class="btn-primary">変更を保存</button>
               </div>
-            </div>
-            <p class="comment-body">${escapeHtml(c.body)}</p>
+            </form>
           </li>`;
-      })
-      .join("")}</ul>`;
+      }
+      return `
+        <li class="comment-item">
+          <div class="comment-meta">
+            <div>
+              <span class="comment-stance ${st.cls}">${escapeHtml(st.text)}</span>
+              <span class="comment-author">${escapeHtml(c.author || "匿名")}</span>
+              <span>・${escapeHtml(formatDate(c.createdAt))}</span>
+              ${c.updatedAt ? `<span class="comment-edited-tag">（編集済み）</span>` : ""}
+            </div>
+            <div class="comment-actions">
+              ${owner ? `<button type="button" class="btn-xs-edit js-edit-comment" data-id="${escapeHtml(c.id)}">編集</button>` : ""}
+              ${canDelete ? `<button type="button" class="btn-xs-danger js-delete-comment" data-id="${escapeHtml(c.id)}">削除</button>` : ""}
+            </div>
+          </div>
+          <p class="comment-body">${escapeHtml(c.body)}</p>
+        </li>`;
+    }).join("")}</ul>`;
   }
 
   const formHtml = db
@@ -1508,8 +1246,7 @@ function renderCommentsSection(item) {
       </h3>
       ${bodyHtml}
       ${formHtml}
-    </section>
-  `;
+    </section>`;
 }
 
 function renderComparePanel() {
@@ -1524,8 +1261,7 @@ function renderComparePanel() {
   const listForPager = getFilteredArguments();
   const currentIdx = listForPager.findIndex((a) => a.coord === item.coord);
   const prevItem = currentIdx > 0 ? listForPager[currentIdx - 1] : null;
-  const nextItem =
-    currentIdx >= 0 && currentIdx < listForPager.length - 1 ? listForPager[currentIdx + 1] : null;
+  const nextItem = currentIdx >= 0 && currentIdx < listForPager.length - 1 ? listForPager[currentIdx + 1] : null;
 
   els.comparePanel.innerHTML = `
     <div class="detail-topbar">
@@ -1535,11 +1271,7 @@ function renderComparePanel() {
       </div>
       <div class="detail-topbar-right">
         <button type="button" class="detail-quick-btn js-scroll-comments">💬 コメント (${state.comments.length})</button>
-        ${
-          state.isAdmin
-            ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>`
-            : ""
-        }
+        ${state.isAdmin ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>` : ""}
       </div>
     </div>
 
@@ -1549,11 +1281,7 @@ function renderComparePanel() {
         <div class="compare-head-actions">
           <span class="coord-badge is-neutral">水準 ${escapeHtml(item.stage)}</span>
           <button type="button" class="flip-btn js-expand-detail" data-coord="${escapeHtml(item.coord)}">⤢ 拡大</button>
-          ${
-            state.isAdmin
-              ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>`
-              : ""
-          }
+          ${state.isAdmin ? `<button type="button" class="admin-action-btn js-edit-arg" data-coord="${escapeHtml(item.coord)}">編集</button>` : ""}
         </div>
       </div>
       <div class="compare-topic">${escapeHtml(item.topic)}</div>
@@ -1582,21 +1310,14 @@ function renderComparePanel() {
       ${renderCommentsSection(item)}
 
       <div class="detail-pager">
-        <button
-          type="button"
-          class="pager-btn js-pager-nav"
-          data-coord="${prevItem ? escapeHtml(prevItem.coord) : ""}"
-          ${prevItem ? "" : "disabled"}
-        >${prevItem ? `← 前の座標 (${escapeHtml(prevItem.coord)})` : "← 前の座標なし"}</button>
-        <button
-          type="button"
-          class="pager-btn js-pager-nav"
-          data-coord="${nextItem ? escapeHtml(nextItem.coord) : ""}"
-          ${nextItem ? "" : "disabled"}
-        >${nextItem ? `次の座標 (${escapeHtml(nextItem.coord)}) →` : "次の座標なし →"}</button>
+        <button type="button" class="pager-btn js-pager-nav" data-coord="${prevItem ? escapeHtml(prevItem.coord) : ""}" ${prevItem ? "" : "disabled"}>
+          ${prevItem ? `← 前の座標 (${escapeHtml(prevItem.coord)})` : "← 前の座標なし"}
+        </button>
+        <button type="button" class="pager-btn js-pager-nav" data-coord="${nextItem ? escapeHtml(nextItem.coord) : ""}" ${nextItem ? "" : "disabled"}>
+          ${nextItem ? `次の座標 (${escapeHtml(nextItem.coord)}) →` : "次の座標なし →"}
+        </button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderAll() {
@@ -1621,74 +1342,49 @@ function selectCoord(coord, { reloadComments = true } = {}) {
   renderList();
   renderComparePanel();
   syncUrlHash();
-  if (reloadComments && changed) {
-    loadCommentsForCoord(coord);
-  }
+  if (reloadComments && changed) loadCommentsForCoord(coord);
 }
 
 function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   const item = findArg(coord);
   if (!item) return;
-
-  state.history.push({
-    stage: state.stage,
-    mode: state.mode,
-    coord: state.selectedCoord
-  });
-
-  if (state.stage !== "all" && item.stage !== state.stage) {
-    state.stage = item.stage;
-  }
-  if (targetMode) {
-    state.mode = targetMode;
-  }
-
+  state.history.push({ stage: state.stage, mode: state.mode, coord: state.selectedCoord });
+  if (state.stage !== "all" && item.stage !== state.stage) state.stage = item.stage;
+  if (targetMode) state.mode = targetMode;
   if (state.query) {
     state.query = "";
     els.searchInput.value = "";
   }
-
   if (closeDetail && state.detailOpen) {
     state.detailOpen = false;
     state.pushedDetailHistory = false;
     applyDetailBodyClass();
   }
-
   const coordChanged = state.selectedCoord !== coord;
   state.selectedCoord = coord;
   if (coordChanged) state.editingCommentId = null;
 
   renderAll();
-  if (state.detailOpen) {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  } else {
-    focusCard(coord);
-  }
-  if (coordChanged) {
-    loadCommentsForCoord(coord);
-  }
+  if (state.detailOpen) window.scrollTo({ top: 0, behavior: "smooth" });
+  else focusCard(coord);
+  if (coordChanged) loadCommentsForCoord(coord);
 }
 
 function goBack() {
   const prev = state.history.pop();
   if (!prev) return;
-
   const coordChanged = state.selectedCoord !== prev.coord;
   state.stage = prev.stage;
   state.mode = prev.mode;
   state.selectedCoord = prev.coord;
   if (coordChanged) state.editingCommentId = null;
-
   if (state.query) {
     state.query = "";
     els.searchInput.value = "";
   }
-
   renderAll();
   focusCard(prev.coord);
-  if (coordChanged) {
-    loadCommentsForCoord(prev.coord);
-  }
+  if (coordChanged) loadCommentsForCoord(prev.coord);
 }
 
 // === 8. 管理者モーダル操作 ===
@@ -1709,7 +1405,6 @@ function openProfileDialog() {
 function openTopicDialog(topicId = null) {
   els.topicError.hidden = true;
   state.editingTopicId = topicId;
-
   if (topicId) {
     const info = findTopic(topicId);
     if (!info) return;
@@ -1729,7 +1424,6 @@ function openTopicDialog(topicId = null) {
     els.topicMinusLabel.value = "反論側";
     els.topicDeleteBtn.hidden = true;
   }
-
   els.topicDialog.showModal();
 }
 
@@ -1762,14 +1456,11 @@ function openArgDialog(coord = null) {
     els.argCoord.readOnly = false;
     els.argDeleteBtn.hidden = true;
   }
-
   els.argDialog.showModal();
 }
 
 function suggestNextStageId() {
-  const nums = state.stages
-    .map((s) => Number(s.id))
-    .filter((n) => Number.isInteger(n) && n >= 0);
+  const nums = state.stages.map((s) => Number(s.id)).filter((n) => Number.isInteger(n) && n >= 0);
   return nums.length > 0 ? String(Math.max(...nums) + 1) : "1";
 }
 
@@ -1801,7 +1492,6 @@ function openStageDialog(stageId = null) {
     els.stageMinus.placeholder = `(-${nextId}) ${topic.minusLabel}の基本命題を記入`;
     els.stageDeleteBtn.hidden = true;
   }
-
   els.stageDialog.showModal();
 }
 
@@ -1811,22 +1501,14 @@ els.menuCloseBtn.addEventListener("click", closeNavDrawer);
 els.navBackdrop.addEventListener("click", closeNavDrawer);
 
 window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && state.drawerOpen) {
-    closeNavDrawer();
-  }
+  if (e.key === "Escape" && state.drawerOpen) closeNavDrawer();
 });
 
 window.addEventListener("popstate", () => {
-  if (state.detailOpen) {
-    closeDetailView({ restoreScroll: true });
-  }
+  if (state.detailOpen) closeDetailView({ restoreScroll: true });
 });
 
-els.drawerNavButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    switchPage(btn.dataset.page);
-  });
-});
+els.drawerNavButtons.forEach((btn) => btn.addEventListener("click", () => switchPage(btn.dataset.page)));
 
 document.addEventListener("click", (e) => {
   if (e.target.closest(".js-go-explorer")) {
@@ -1837,21 +1519,14 @@ document.addEventListener("click", (e) => {
     switchPage("profile");
     return;
   }
-  if (e.target.closest(".js-open-profile-edit")) {
-    openProfileDialog();
-  }
+  if (e.target.closest(".js-open-profile-edit")) openProfileDialog();
 });
 
 document.querySelectorAll(".js-close-dialog").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    btn.closest("dialog")?.close();
-  });
+  btn.addEventListener("click", () => btn.closest("dialog")?.close());
 });
 
-els.topicSelect.addEventListener("change", (e) => {
-  switchTopic(e.target.value);
-});
-
+els.topicSelect.addEventListener("change", (e) => switchTopic(e.target.value));
 els.editTopicBtn.addEventListener("click", () => openTopicDialog(state.currentTopicId));
 els.addTopicBtn.addEventListener("click", () => openTopicDialog(null));
 
@@ -1882,22 +1557,13 @@ els.logoutBtn.addEventListener("click", async () => {
   await signOut(auth);
 });
 
-// プロフィールの保存
 els.profileForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!db || !state.isAdmin) return;
   els.profileError.hidden = true;
 
-  const interests = els.profileInterests.value
-    .split(/[,、]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const rawLines = els.profileLinks.value
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
+  const interests = els.profileInterests.value.split(/[,、]/).map((s) => s.trim()).filter(Boolean);
+  const rawLines = els.profileLinks.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
   const links = [];
   for (const line of rawLines) {
     if (line.includes("|")) {
@@ -1952,13 +1618,11 @@ els.profileContent.addEventListener("click", async (e) => {
     renderProfilePage();
     return;
   }
-
   if (e.target.closest(".js-cancel-edit-admin-comment")) {
     state.editingAdminCommentId = null;
     renderProfilePage();
     return;
   }
-
   const delBtn = e.target.closest(".js-delete-admin-comment");
   if (delBtn && db) {
     const target = state.adminComments.find((c) => c.id === delBtn.dataset.id);
@@ -1966,9 +1630,7 @@ els.profileContent.addEventListener("click", async (e) => {
     if (!confirm("このコメントを削除しますか？")) return;
     try {
       await deleteDoc(doc(db, "adminComments", target.id));
-      if (state.editingAdminCommentId === target.id) {
-        state.editingAdminCommentId = null;
-      }
+      if (state.editingAdminCommentId === target.id) state.editingAdminCommentId = null;
       await loadAdminComments();
     } catch (err) {
       console.error(err);
@@ -1978,11 +1640,9 @@ els.profileContent.addEventListener("click", async (e) => {
 });
 
 els.profileContent.addEventListener("submit", async (e) => {
-  // 管理者へのコメントの編集保存（本人のみ）
   if (e.target.classList.contains("js-admin-comment-edit-form")) {
     e.preventDefault();
     if (!db) return;
-
     const commentId = e.target.dataset.id;
     const target = state.adminComments.find((c) => c.id === commentId);
     if (!isCommentOwner(target)) return;
@@ -1996,14 +1656,9 @@ els.profileContent.addEventListener("submit", async (e) => {
 
     submitBtn.disabled = true;
     submitBtn.textContent = "保存中...";
-
     try {
       await updateDoc(doc(db, "adminComments", commentId), {
-        author,
-        category,
-        targetRef,
-        body,
-        updatedAt: serverTimestamp()
+        author, category, targetRef, body, updatedAt: serverTimestamp()
       });
       state.editingAdminCommentId = null;
       await loadAdminComments();
@@ -2017,11 +1672,9 @@ els.profileContent.addEventListener("submit", async (e) => {
     return;
   }
 
-  // 管理者へのコメントの新規投稿
   if (e.target.id === "admin-comment-add-form") {
     e.preventDefault();
     if (!db) return;
-
     const authorInput = document.getElementById("admin-comment-author");
     const categoryInput = document.getElementById("admin-comment-category");
     const targetInput = document.getElementById("admin-comment-target");
@@ -2036,16 +1689,10 @@ els.profileContent.addEventListener("submit", async (e) => {
 
     submitBtn.disabled = true;
     submitBtn.textContent = "送信中...";
-
     try {
       const uid = await ensureSignedInUid();
       await addDoc(collection(db, "adminComments"), {
-        category,
-        targetRef,
-        author,
-        body,
-        authorUid: uid,
-        createdAt: serverTimestamp()
+        category, targetRef, author, body, authorUid: uid, createdAt: serverTimestamp()
       });
       bodyInput.value = "";
       targetInput.value = "";
@@ -2069,28 +1716,23 @@ els.inlineAddStageBtn.addEventListener("click", () => openStageDialog(null));
 els.addArgBtn.addEventListener("click", () => openArgDialog(null));
 els.seedDbBtn.addEventListener("click", seedInitialDataToFirestore);
 
-// 論題の保存
 els.topicForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!db || !state.isAdmin) return;
-
   const id = els.topicId.value.trim();
   if (!/^[a-zA-Z0-9_-]+$/.test(id) || id === "guide" || id === "profile") {
     els.topicError.textContent = "論題IDには半角英数字・ハイフン・アンダースコアのみ使え、「guide」「profile」は予約語のため使用できません。";
     els.topicError.hidden = false;
     return;
   }
-
   const isCreating = !state.editingTopicId;
   if (isCreating && findTopic(id)) {
     els.topicError.textContent = `論題ID「${id}」はすでに使われています。別のIDを指定してください。`;
     els.topicError.hidden = false;
     return;
   }
-
   const existing = findTopic(id);
   const maxOrder = state.topics.reduce((m, t) => Math.max(m, t.order || 0), 0);
-
   const payload = {
     id,
     title: els.topicTitle.value.trim(),
@@ -2101,18 +1743,13 @@ els.topicForm.addEventListener("submit", async (e) => {
     useLegacyRoot: existing ? existing.useLegacyRoot : false,
     updatedAt: serverTimestamp()
   };
-
   try {
     await ensureTopicsSeededInDb();
     await setDoc(doc(db, "topics", id), payload);
     els.topicDialog.close();
     await loadTopics();
-
-    if (isCreating) {
-      await switchTopic(id);
-    } else {
-      renderAll();
-    }
+    if (isCreating) await switchTopic(id);
+    else renderAll();
   } catch (err) {
     console.error(err);
     els.topicError.textContent = "保存に失敗しました。Firestoreのルール（topics）を確認してください。";
@@ -2120,39 +1757,29 @@ els.topicForm.addEventListener("submit", async (e) => {
   }
 });
 
-// 論題の削除
 els.topicDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingTopicId) return;
   const targetId = state.editingTopicId;
-
   if (state.topics.length <= 1) {
     els.topicError.textContent = "最後の1件の論題は削除できません。";
     els.topicError.hidden = false;
     return;
   }
-
   if (state.arguments.length > 0) {
     els.topicError.textContent = `この論題には ${state.arguments.length} 件の命題が残っています。誤削除を防ぐため、先に命題を削除してください。`;
     els.topicError.hidden = false;
     return;
   }
-
-  if (!confirm(`論題「${findTopic(targetId)?.title || targetId}」を削除しますか？この操作は元に戻せません。`)) {
-    return;
-  }
-
+  if (!confirm(`論題「${findTopic(targetId)?.title || targetId}」を削除しますか？この操作は元に戻せません。`)) return;
   try {
     await ensureTopicsSeededInDb();
     if (!isLegacyTopic(targetId)) {
-      for (const st of state.stages) {
-        await deleteDoc(stageDoc(st.id, targetId));
-      }
+      for (const st of state.stages) await deleteDoc(stageDoc(st.id, targetId));
     }
     await deleteDoc(doc(db, "topics", targetId));
     els.topicDialog.close();
     await loadTopics();
-    const nextTopicId = state.topics[0]?.id || DEFAULT_TOPIC.id;
-    await switchTopic(nextTopicId);
+    await switchTopic(state.topics[0]?.id || DEFAULT_TOPIC.id);
   } catch (err) {
     console.error(err);
     els.topicError.textContent = "削除に失敗しました。";
@@ -2160,24 +1787,20 @@ els.topicDeleteBtn.addEventListener("click", async () => {
   }
 });
 
-// 水準の保存
 els.stageForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!db || !state.isAdmin) return;
-
   const id = els.stageId.value.trim();
   if (!id || id === "all" || id.includes("/")) {
     els.stageError.textContent = "水準番号に「all」やスラッシュ（/）は使えません。";
     els.stageError.hidden = false;
     return;
   }
-
   if (!state.editingStageId && findStage(id)) {
     els.stageError.textContent = `水準 ${id} はすでに存在します。既存の水準を編集してください。`;
     els.stageError.hidden = false;
     return;
   }
-
   const payload = {
     id,
     label: els.stageLabel.value.trim(),
@@ -2185,18 +1808,13 @@ els.stageForm.addEventListener("submit", async (e) => {
     minus: els.stageMinus.value.trim(),
     updatedAt: serverTimestamp()
   };
-
   try {
     await ensureStagesSeededInDb();
     await setDoc(stageDoc(id), payload);
     els.stageDialog.close();
     await loadStages();
-
-    if (els.argDialog.open) {
-      populateStageSelect(id);
-    } else {
-      state.stage = id;
-    }
+    if (els.argDialog.open) populateStageSelect(id);
+    else state.stage = id;
     renderAll();
   } catch (err) {
     console.error(err);
@@ -2205,28 +1823,22 @@ els.stageForm.addEventListener("submit", async (e) => {
   }
 });
 
-// 水準の削除
 els.stageDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingStageId) return;
   const targetId = state.editingStageId;
   const linkedCount = state.arguments.filter((a) => a.stage === targetId).length;
-
   if (linkedCount > 0) {
     els.stageError.textContent = `この水準には ${linkedCount} 件の命題が紐づいています。先にそれらの命題の水準を変更または削除してください。`;
     els.stageError.hidden = false;
     return;
   }
-
   if (!confirm(`水準 ${targetId} を削除しますか？この操作は元に戻せません。`)) return;
-
   try {
     await ensureStagesSeededInDb();
     await deleteDoc(stageDoc(targetId));
     els.stageDialog.close();
     await loadStages();
-    if (state.stage === targetId) {
-      state.stage = state.stages[0]?.id || "all";
-    }
+    if (state.stage === targetId) state.stage = state.stages[0]?.id || "all";
     renderAll();
   } catch (err) {
     console.error(err);
@@ -2235,38 +1847,28 @@ els.stageDeleteBtn.addEventListener("click", async () => {
   }
 });
 
-// 命題の保存
 els.argForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!db || !state.isAdmin) return;
-
   const coord = els.argCoord.value.trim();
   const stageVal = String(els.argStage.value).trim();
-
   if (!stageVal) {
     els.argError.textContent = "先に「+ 水準を新規追加」から水準を1つ作成してください。";
     els.argError.hidden = false;
     return;
   }
-
   if (!coord || coord.includes("/")) {
     els.argError.textContent = "座標にスラッシュ（/）は使えません。";
     els.argError.hidden = false;
     return;
   }
-
   if (!state.editingCoord && findArg(coord)) {
     els.argError.textContent = `座標 ${coord} はすでに存在します。既存の座標を編集してください。`;
     els.argError.hidden = false;
     return;
   }
-
   const existing = findArg(coord);
-  const refs = els.argRefs.value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
+  const refs = els.argRefs.value.split(",").map((s) => s.trim()).filter(Boolean);
   const payload = {
     coord,
     stage: stageVal,
@@ -2279,7 +1881,6 @@ els.argForm.addEventListener("submit", async (e) => {
     bibliography: existing ? existing.bibliography : [],
     updatedAt: serverTimestamp()
   };
-
   try {
     await setDoc(argumentDoc(coord), payload);
     els.argDialog.close();
@@ -2296,22 +1897,17 @@ els.argForm.addEventListener("submit", async (e) => {
   }
 });
 
-// 命題の削除
 els.argDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingCoord) return;
   const target = state.editingCoord;
   if (!confirm(`座標 ${target} の命題を削除しますか？この操作は元に戻せません。`)) return;
-
   try {
     await deleteDoc(argumentDoc(target));
     els.argDialog.close();
     await loadArguments();
     state.selectedCoord = state.arguments[0]?.coord || "";
-    if (state.detailOpen) {
-      closeDetailView({ restoreScroll: false });
-    } else {
-      renderAll();
-    }
+    if (state.detailOpen) closeDetailView({ restoreScroll: false });
+    else renderAll();
     loadCommentsForCoord(state.selectedCoord);
   } catch (err) {
     console.error(err);
@@ -2324,7 +1920,6 @@ els.stageTabs.addEventListener("click", (e) => {
   const btn = e.target.closest(".tab-btn");
   if (!btn) return;
   state.stage = btn.dataset.stage;
-
   const current = findArg(state.selectedCoord);
   if (state.stage !== "all" && (!current || current.stage !== state.stage)) {
     const firstInStage = state.arguments.find((a) => a.stage === state.stage);
@@ -2338,9 +1933,7 @@ els.stageTabs.addEventListener("click", (e) => {
 
 els.stageBanner.addEventListener("click", (e) => {
   const editStageBtn = e.target.closest(".js-edit-stage");
-  if (editStageBtn) {
-    openStageDialog(editStageBtn.dataset.stageId);
-  }
+  if (editStageBtn) openStageDialog(editStageBtn.dataset.stageId);
 });
 
 els.modeButtons.forEach((btn) => {
@@ -2364,21 +1957,16 @@ els.argList.addEventListener("click", (e) => {
     jumpTo(flipBtn.dataset.coord, flipBtn.dataset.targetMode);
     return;
   }
-
   const refBtn = e.target.closest(".js-ref-btn");
   if (refBtn) {
     e.stopPropagation();
     jumpTo(refBtn.dataset.ref, null);
     return;
   }
-
   const card = e.target.closest(".arg-card");
   if (card) {
-    if (isMobileViewport()) {
-      openDetailView(card.dataset.coord);
-    } else {
-      selectCoord(card.dataset.coord);
-    }
+    if (isMobileViewport()) openDetailView(card.dataset.coord);
+    else selectCoord(card.dataset.coord);
   }
 });
 
@@ -2387,49 +1975,36 @@ els.comparePanel.addEventListener("click", async (e) => {
     requestCloseDetailView();
     return;
   }
-
   const expandBtn = e.target.closest(".js-expand-detail");
   if (expandBtn) {
     openDetailView(expandBtn.dataset.coord);
     return;
   }
-
   if (e.target.closest(".js-scroll-comments")) {
-    const target = document.getElementById("detail-comments-section");
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    document.getElementById("detail-comments-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
   }
-
   const pagerBtn = e.target.closest(".js-pager-nav");
   if (pagerBtn && pagerBtn.dataset.coord) {
     openDetailView(pagerBtn.dataset.coord, { pushBrowserHistory: false });
     return;
   }
-
   const editBtn = e.target.closest(".js-edit-arg");
   if (editBtn) {
     openArgDialog(editBtn.dataset.coord);
     return;
   }
-
   const jumpBtn = e.target.closest(".js-jump-mode");
   if (jumpBtn) {
     jumpTo(jumpBtn.dataset.coord, jumpBtn.dataset.targetMode, { closeDetail: true });
     return;
   }
-
   const refBtn = e.target.closest(".js-ref-btn");
   if (refBtn) {
-    if (state.detailOpen) {
-      openDetailView(refBtn.dataset.ref, { pushBrowserHistory: false });
-    } else {
-      jumpTo(refBtn.dataset.ref, null);
-    }
+    if (state.detailOpen) openDetailView(refBtn.dataset.ref, { pushBrowserHistory: false });
+    else jumpTo(refBtn.dataset.ref, null);
     return;
   }
-
   const delBibBtn = e.target.closest(".js-delete-bib");
   if (delBibBtn && db && state.isAdmin) {
     const item = findArg(state.selectedCoord);
@@ -2437,11 +2012,7 @@ els.comparePanel.addEventListener("click", async (e) => {
     const idx = Number(delBibBtn.dataset.index);
     const nextBib = item.bibliography.filter((_, i) => i !== idx);
     try {
-      await setDoc(argumentDoc(item.coord), {
-        ...item,
-        bibliography: nextBib,
-        updatedAt: serverTimestamp()
-      });
+      await setDoc(argumentDoc(item.coord), { ...item, bibliography: nextBib, updatedAt: serverTimestamp() });
       item.bibliography = nextBib;
       renderList();
       renderComparePanel();
@@ -2451,8 +2022,6 @@ els.comparePanel.addEventListener("click", async (e) => {
     }
     return;
   }
-
-  // 命題コメントのインライン編集開始（本人のみ）
   const editCommentBtn = e.target.closest(".js-edit-comment");
   if (editCommentBtn) {
     const target = state.comments.find((c) => c.id === editCommentBtn.dataset.id);
@@ -2461,14 +2030,11 @@ els.comparePanel.addEventListener("click", async (e) => {
     renderComparePanel();
     return;
   }
-
   if (e.target.closest(".js-cancel-edit-comment")) {
     state.editingCommentId = null;
     renderComparePanel();
     return;
   }
-
-  // 命題コメント削除（本人または管理者）
   const delCommentBtn = e.target.closest(".js-delete-comment");
   if (delCommentBtn && db) {
     const target = state.comments.find((c) => c.id === delCommentBtn.dataset.id);
@@ -2476,9 +2042,7 @@ els.comparePanel.addEventListener("click", async (e) => {
     if (!confirm("このコメントを削除しますか？")) return;
     try {
       await deleteDoc(commentDoc(target.id));
-      if (state.editingCommentId === target.id) {
-        state.editingCommentId = null;
-      }
+      if (state.editingCommentId === target.id) state.editingCommentId = null;
       await loadCommentsForCoord(state.selectedCoord);
     } catch (err) {
       console.error(err);
@@ -2493,19 +2057,13 @@ els.comparePanel.addEventListener("submit", async (e) => {
     if (!db || !state.isAdmin) return;
     const item = findArg(state.selectedCoord);
     if (!item) return;
-
     const citation = document.getElementById("bib-citation").value.trim();
     const url = document.getElementById("bib-url").value.trim();
     const note = document.getElementById("bib-note").value.trim();
     if (!citation) return;
-
     const nextBib = [...item.bibliography, { citation, url, note }];
     try {
-      await setDoc(argumentDoc(item.coord), {
-        ...item,
-        bibliography: nextBib,
-        updatedAt: serverTimestamp()
-      });
+      await setDoc(argumentDoc(item.coord), { ...item, bibliography: nextBib, updatedAt: serverTimestamp() });
       item.bibliography = nextBib;
       renderList();
       renderComparePanel();
@@ -2516,11 +2074,9 @@ els.comparePanel.addEventListener("submit", async (e) => {
     return;
   }
 
-  // 命題コメントの編集保存（本人のみ）
   if (e.target.classList.contains("js-comment-edit-form")) {
     e.preventDefault();
     if (!db) return;
-
     const commentId = e.target.dataset.id;
     const target = state.comments.find((c) => c.id === commentId);
     if (!isCommentOwner(target)) return;
@@ -2533,14 +2089,8 @@ els.comparePanel.addEventListener("submit", async (e) => {
 
     submitBtn.disabled = true;
     submitBtn.textContent = "保存中...";
-
     try {
-      await updateDoc(commentDoc(commentId), {
-        author,
-        stance,
-        body,
-        updatedAt: serverTimestamp()
-      });
+      await updateDoc(commentDoc(commentId), { author, stance, body, updatedAt: serverTimestamp() });
       state.editingCommentId = null;
       await loadCommentsForCoord(state.selectedCoord);
     } catch (err) {
@@ -2553,11 +2103,9 @@ els.comparePanel.addEventListener("submit", async (e) => {
     return;
   }
 
-  // 命題コメントの新規投稿
   if (e.target.id === "comment-add-form") {
     e.preventDefault();
     if (!db || !state.selectedCoord) return;
-
     const authorInput = document.getElementById("comment-author");
     const stanceInput = document.getElementById("comment-stance");
     const bodyInput = document.getElementById("comment-body");
@@ -2570,16 +2118,10 @@ els.comparePanel.addEventListener("submit", async (e) => {
 
     submitBtn.disabled = true;
     submitBtn.textContent = "送信中...";
-
     try {
       const uid = await ensureSignedInUid();
       await addDoc(commentsCollection(), {
-        coord: state.selectedCoord,
-        stance,
-        author,
-        body,
-        authorUid: uid,
-        createdAt: serverTimestamp()
+        coord: state.selectedCoord, stance, author, body, authorUid: uid, createdAt: serverTimestamp()
       });
       bodyInput.value = "";
       await loadCommentsForCoord(state.selectedCoord);
@@ -2615,12 +2157,7 @@ async function init() {
 
   const { page, topicId, coordToken } = parseUrlHashTokens();
   state.page = page;
-
-  if (topicId && findTopic(topicId)) {
-    state.currentTopicId = topicId;
-  } else {
-    state.currentTopicId = state.topics[0]?.id || DEFAULT_TOPIC.id;
-  }
+  state.currentTopicId = topicId && findTopic(topicId) ? topicId : state.topics[0]?.id || DEFAULT_TOPIC.id;
 
   await Promise.all([loadStages(), loadArguments()]);
 
