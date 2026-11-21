@@ -8,17 +8,9 @@
 </head>
 <body>
   <header class="site-header">
-    <!-- 最上段：三本線メニューボタン ＋ 論題切替（他ページではページ名を表示） -->
     <div class="top-utility-bar">
       <div class="top-utility-inner">
-        <button
-          type="button"
-          id="menu-open-btn"
-          class="hamburger-btn"
-          aria-label="メニューを開く"
-          aria-controls="nav-drawer"
-          aria-expanded="false"
-        >
+        <button type="button" id="menu-open-btn" class="hamburger-btn" aria-label="メニューを開く" aria-controls="nav-drawer" aria-expanded="false">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
@@ -36,12 +28,10 @@
         </div>
 
         <div id="top-page-label" class="top-page-label" hidden></div>
-
         <span id="admin-badge" class="admin-badge" hidden>管理者</span>
       </div>
     </div>
 
-    <!-- 論証ページ専用の操作ヘッダー -->
     <div id="explorer-header-panel" class="header-inner">
       <div id="explorer-admin-bar" class="admin-bar explorer-admin-bar" hidden>
         <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 水準を追加</button>
@@ -56,21 +46,14 @@
           <button type="button" class="mode-btn" data-mode="plus">+ 肯定側</button>
           <button type="button" class="mode-btn" data-mode="minus">- 反論側</button>
           <button type="button" class="mode-btn" data-mode="split">⇄ 比較</button>
+          <button type="button" class="mode-btn" data-mode="mine">自説</button>
         </div>
 
-        <input
-          id="search-input"
-          class="search-input"
-          type="search"
-          placeholder="座標・キーワード・参考文献で検索"
-          aria-label="命題を検索"
-        />
-
+        <input id="search-input" class="search-input" type="search" placeholder="座標・キーワード・参考文献で検索" aria-label="命題を検索" />
       </div>
     </div>
   </header>
 
-  <!-- 折りたたみ式スライドメニュー（ドロワー） -->
   <div id="nav-backdrop" class="nav-backdrop" hidden></div>
   <aside id="nav-drawer" class="nav-drawer" aria-label="サイトメニュー" aria-hidden="true">
     <div class="drawer-head">
@@ -91,7 +74,6 @@
     </div>
   </aside>
 
-  <!-- ページ1：論証エクスプローラー（命題一覧） -->
   <div id="explorer-view" class="container">
     <div id="status-notice" class="status-notice" hidden></div>
     <section id="stage-banner" class="stage-banner" aria-live="polite"></section>
@@ -102,7 +84,6 @@
     </main>
   </div>
 
-  <!-- ページ2：このサイトの使い方 -->
   <div id="guide-view" class="container page-container" hidden>
     <article class="doc-card">
       <header class="doc-header">
@@ -138,16 +119,16 @@
             <p>最上部の<strong>「論題」プルダウン</strong>からテーマを選び、その下の<strong>水準タブ</strong>で読みたい水準（または「全命題」）を切り替えることができます。</p>
           </div>
           <div class="guide-box">
-            <h4>3つの表示モードを使い分ける</h4>
-            <p><strong>+ / -</strong> では一方の立場に属する命題だけを筋道立てて通読できます。<strong>⇄ 比較</strong>に切り替えると、対立する命題を左右に並べて論証全体を俯瞰できます。</p>
+            <h4>4つの表示モードを使い分ける</h4>
+            <p><strong>+ / -</strong> では一方の立場に属する命題だけを筋道立てて通読できます。<strong>⇄ 比較</strong>では対立する命題を左右に並べて俯瞰でき、<strong>自説</strong>では自分が評価を下した極性の命題だけを一覧表示できます。</p>
           </div>
           <div class="guide-box">
-            <h4>極性（符号）の反転</h4>
-            <p>各カードの<strong>「⇄ 反転」ボタン</strong>を押すと、対向する立場の同一座標の命題へ瞬時に移動してそれを強調表示できます。</p>
+            <h4>極性（符号）の反転と命題の評価</h4>
+            <p>各カードの<strong>「⇄ 反転」ボタン</strong>を押すと、対向する立場の同一座標の命題へ即座に移動して強調表示できます。また、一覧カードおよび詳細ページの<strong>「<code>+</code> / <code>=</code> / <code>-</code>」ボタン</strong>から、各命題をその論題の <code>+</code> 側・保留（<code>=</code>）・<code>-</code> 側の3段階で評価してブラウザに記憶させられます（初期状態は保留 <code>=</code>）。評価の統一はあくまで<strong>前提 → 帰結</strong>の方向性でのみ行われ、ある命題の評価を変更するとそれを前提とする帰結側の命題へ自動的に同じ評価が反映されます（帰結側を変更しても前提側の評価は変わりません）。</p>
           </div>
           <div class="guide-box">
             <h4>前提・被参照リンクと検索</h4>
-            <p><strong>±1.10</strong> のようなチップを押すと、水準をまたいで前提命題や参照元の命題へ移動できます。検索欄では座標・キーワード・参考文献から命題を絞り込むことができます。</p>
+            <p><strong>±1.10</strong> のようなチップを押すと、水準をまたいで前提命題や参照元の命題へ移動できます。検索欄では座標番号・命題本文・参考文献から命題を絞り込むことができます。</p>
           </div>
         </div>
       </section>
@@ -177,26 +158,18 @@
     </article>
   </div>
 
-  <!-- ページ3：管理者のプロフィール -->
   <div id="profile-view" class="container page-container" hidden>
     <article id="profile-content" class="doc-card"></article>
   </div>
 
-  <!-- 管理者ログイン用ダイアログ -->
   <dialog id="login-dialog" class="modal">
     <form id="login-form" class="modal-form">
       <div class="modal-head">
         <h2>管理者ログイン</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
-      <label class="field">
-        <span>メールアドレス</span>
-        <input type="email" id="login-email" required autocomplete="username" />
-      </label>
-      <label class="field">
-        <span>パスワード</span>
-        <input type="password" id="login-password" required autocomplete="current-password" />
-      </label>
+      <label class="field"><span>メールアドレス</span><input type="email" id="login-email" required autocomplete="username" /></label>
+      <label class="field"><span>パスワード</span><input type="password" id="login-password" required autocomplete="current-password" /></label>
       <p id="login-error" class="form-error" hidden></p>
       <div class="modal-actions">
         <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
@@ -205,51 +178,21 @@
     </form>
   </dialog>
 
-  <!-- 管理者プロフィール編集用ダイアログ（管理者専用） -->
   <dialog id="profile-dialog" class="modal modal-wide">
     <form id="profile-form" class="modal-form">
       <div class="modal-head">
         <h2>管理者プロフィールを編集</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
-
       <div class="form-grid-2">
-        <label class="field">
-          <span>名前・ハンドルネーム</span>
-          <input type="text" id="profile-name" required placeholder="例：管理者名" />
-        </label>
-        <label class="field">
-          <span>肩書き・ひとこと（任意）</span>
-          <input type="text" id="profile-role" placeholder="例：哲学・論理学専攻 / サイト運営者" />
-        </label>
+        <label class="field"><span>名前・ハンドルネーム</span><input type="text" id="profile-name" required placeholder="例：管理者名" /></label>
+        <label class="field"><span>肩書き・ひとこと（任意）</span><input type="text" id="profile-role" placeholder="例：哲学・論理学専攻 / サイト運営者" /></label>
       </div>
-
-      <label class="field">
-        <span>自己紹介</span>
-        <textarea id="profile-bio" rows="6" placeholder="自己紹介や、このサイトを作成した目的などを自由に記入してください。"></textarea>
-      </label>
-
-      <label class="field">
-        <span>関心領域・テーマ（カンマ区切り・任意）</span>
-        <input type="text" id="profile-interests" placeholder="例：分析哲学, 応用倫理学, 形式論理学, 人口倫理" />
-      </label>
-
-      <label class="field">
-        <span>外部リンク（1行に1件・任意。「表示名 | URL」または「URLのみ」）</span>
-        <textarea
-          id="profile-links"
-          rows="4"
-          placeholder="X (Twitter) | https://x.com/your_id&#10;note | https://note.com/your_id"
-        ></textarea>
-      </label>
-
-      <label class="field">
-        <span>連絡先・補足メモ（任意）</span>
-        <textarea id="profile-contact" rows="2" placeholder="誤植報告やサイト全体へのご意見の送り先など"></textarea>
-      </label>
-
+      <label class="field"><span>自己紹介</span><textarea id="profile-bio" rows="6" placeholder="自己紹介や、このサイトを作成した目的などを自由に記入してください。"></textarea></label>
+      <label class="field"><span>関心領域・テーマ（カンマ区切り・任意）</span><input type="text" id="profile-interests" placeholder="例：分析哲学, 応用倫理学, 形式論理学, 人口倫理" /></label>
+      <label class="field"><span>外部リンク（1行に1件・任意。「表示名 | URL」または「URLのみ」）</span><textarea id="profile-links" rows="4" placeholder="X (Twitter) | https://x.com/your_id&#10;note | https://note.com/your_id"></textarea></label>
+      <label class="field"><span>連絡先・補足メモ（任意）</span><textarea id="profile-contact" rows="2" placeholder="誤植報告やサイト全体へのご意見の送り先など"></textarea></label>
       <p id="profile-error" class="form-error" hidden></p>
-
       <div class="modal-actions">
         <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
         <button type="submit" class="btn-primary">プロフィールを保存</button>
@@ -257,37 +200,19 @@
     </form>
   </dialog>
 
-  <!-- 論題の追加・編集用ダイアログ（管理者専用） -->
   <dialog id="topic-dialog" class="modal">
     <form id="topic-form" class="modal-form">
       <div class="modal-head">
         <h2 id="topic-dialog-title">新しい論題を追加</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
-
-      <label class="field">
-        <span>論題ID（URL用の半角英数字・ハイフン 例：death-penalty）</span>
-        <input type="text" id="topic-id" required placeholder="death-penalty" />
-      </label>
-
-      <label class="field">
-        <span>論題タイトル</span>
-        <input type="text" id="topic-title" required placeholder="例：死刑制度の是非と反論" />
-      </label>
-
+      <label class="field"><span>論題ID（URL用の半角英数字・ハイフン 例：death-penalty）</span><input type="text" id="topic-id" required placeholder="death-penalty" /></label>
+      <label class="field"><span>論題タイトル</span><input type="text" id="topic-title" required placeholder="例：死刑制度の是非と反論" /></label>
       <div class="form-grid-2">
-        <label class="field">
-          <span>「+」側の呼び名</span>
-          <input type="text" id="topic-plus-label" required placeholder="肯定側" />
-        </label>
-        <label class="field">
-          <span>「-」側の呼び名</span>
-          <input type="text" id="topic-minus-label" required placeholder="反論側" />
-        </label>
+        <label class="field"><span>「+」側の呼び名</span><input type="text" id="topic-plus-label" required placeholder="肯定側" /></label>
+        <label class="field"><span>「-」側の呼び名</span><input type="text" id="topic-minus-label" required placeholder="反論側" /></label>
       </div>
-
       <p id="topic-error" class="form-error" hidden></p>
-
       <div class="modal-actions is-between">
         <button type="button" id="topic-delete-btn" class="btn-danger" hidden>この論題を削除</button>
         <div class="modal-actions-right">
@@ -298,20 +223,14 @@
     </form>
   </dialog>
 
-  <!-- 命題の追加・編集用ダイアログ（管理者専用） -->
   <dialog id="arg-dialog" class="modal modal-wide">
     <form id="arg-form" class="modal-form">
       <div class="modal-head">
         <h2 id="arg-dialog-title">命題を編集</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
-
       <div class="form-grid-2">
-        <label class="field">
-          <span>座標（例：1.10 / 2.10a）</span>
-          <input type="text" id="arg-coord" required placeholder="1.10" />
-        </label>
-
+        <label class="field"><span>座標（例：1.10 / 2.10a）</span><input type="text" id="arg-coord" required placeholder="1.10" /></label>
         <div class="field">
           <div class="field-label-row">
             <label for="arg-stage">水準</label>
@@ -320,45 +239,21 @@
           <select id="arg-stage" required></select>
         </div>
       </div>
-
-      <label class="field">
-        <span>トピック見出し（例：1.1x 快苦の非対称性と生の質）</span>
-        <input type="text" id="arg-topic" required />
-      </label>
-
+      <label class="field"><span>トピック見出し（例：1.1x 快苦の非対称性と生の質）</span><input type="text" id="arg-topic" required /></label>
       <div class="form-grid-2">
         <div class="edit-box is-plus">
           <h3 id="arg-plus-heading">肯定側 (+)</h3>
-          <label class="field">
-            <span>見出し</span>
-            <input type="text" id="arg-plus-title" required />
-          </label>
-          <label class="field">
-            <span>本文</span>
-            <textarea id="arg-plus-body" rows="5" required></textarea>
-          </label>
+          <label class="field"><span>見出し</span><input type="text" id="arg-plus-title" required /></label>
+          <label class="field"><span>本文</span><textarea id="arg-plus-body" rows="5" required></textarea></label>
         </div>
-
         <div class="edit-box is-minus">
           <h3 id="arg-minus-heading">反論側 (-)</h3>
-          <label class="field">
-            <span>見出し</span>
-            <input type="text" id="arg-minus-title" required />
-          </label>
-          <label class="field">
-            <span>本文</span>
-            <textarea id="arg-minus-body" rows="5" required></textarea>
-          </label>
+          <label class="field"><span>見出し</span><input type="text" id="arg-minus-title" required /></label>
+          <label class="field"><span>本文</span><textarea id="arg-minus-body" rows="5" required></textarea></label>
         </div>
       </div>
-
-      <label class="field">
-        <span>前提命題の座標（カンマ区切り・任意 例：1.10, 1.21）</span>
-        <input type="text" id="arg-refs" placeholder="1.10, 1.21" />
-      </label>
-
+      <label class="field"><span>前提命題の座標（カンマ区切り・任意 例：1.10, 1.21）</span><input type="text" id="arg-refs" placeholder="1.10, 1.21" /></label>
       <p id="arg-error" class="form-error" hidden></p>
-
       <div class="modal-actions is-between">
         <button type="button" id="arg-delete-btn" class="btn-danger" hidden>この座標を削除</button>
         <div class="modal-actions-right">
@@ -369,37 +264,19 @@
     </form>
   </dialog>
 
-  <!-- 水準の追加・編集用ダイアログ（管理者専用） -->
   <dialog id="stage-dialog" class="modal">
     <form id="stage-form" class="modal-form">
       <div class="modal-head">
         <h2 id="stage-dialog-title">水準を追加</h2>
         <button type="button" class="modal-close js-close-dialog">✕</button>
       </div>
-
       <div class="form-grid-2">
-        <label class="field">
-          <span>水準番号（例：1）</span>
-          <input type="text" id="stage-id" required placeholder="1" />
-        </label>
-        <label class="field">
-          <span>タブ表示名</span>
-          <input type="text" id="stage-label" required placeholder="1. 価値論的水準" />
-        </label>
+        <label class="field"><span>水準番号（例：1）</span><input type="text" id="stage-id" required placeholder="1" /></label>
+        <label class="field"><span>タブ表示名</span><input type="text" id="stage-label" required placeholder="1. 価値論的水準" /></label>
       </div>
-
-      <label class="field">
-        <span id="stage-plus-label-text">肯定側の基本命題 (+N)</span>
-        <textarea id="stage-plus" rows="3" required placeholder="(+1) ..."></textarea>
-      </label>
-
-      <label class="field">
-        <span id="stage-minus-label-text">反論側の基本命題 (-N)</span>
-        <textarea id="stage-minus" rows="3" required placeholder="(-1) ..."></textarea>
-      </label>
-
+      <label class="field"><span id="stage-plus-label-text">肯定側の基本命題 (+N)</span><textarea id="stage-plus" rows="3" required placeholder="(+1) ..."></textarea></label>
+      <label class="field"><span id="stage-minus-label-text">反論側の基本命題 (-N)</span><textarea id="stage-minus" rows="3" required placeholder="(-1) ..."></textarea></label>
       <p id="stage-error" class="form-error" hidden></p>
-
       <div class="modal-actions is-between">
         <button type="button" id="stage-delete-btn" class="btn-danger" hidden>この水準を削除</button>
         <div class="modal-actions-right">

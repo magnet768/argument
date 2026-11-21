@@ -1827,3 +1827,74 @@ body.is-detail-view .detail-pager {
   top: 158px;
   max-height: calc(100vh - 176px);
 }
+
+/* === 命題の評価コントロール（+ / = / -） === */
+.eval-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.eval-row.is-panel {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.eval-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.eval-group {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.eval-btn {
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  min-width: 34px;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.eval-btn:last-child {
+  border-right: none;
+}
+
+.eval-btn:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.eval-btn.is-active[data-eval="plus"] {
+  background: var(--plus-main);
+  color: #ffffff;
+}
+
+.eval-btn.is-active[data-eval="hold"] {
+  background: var(--text);
+  color: #ffffff;
+}
+
+.eval-btn.is-active[data-eval="minus"] {
+  background: var(--minus-main);
+  color: #ffffff;
+}
