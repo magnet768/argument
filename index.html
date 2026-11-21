@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>双方向インデックス論証エクスプローラー</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="title-row">
+        <div>
+          <h1>反出生主義と反論：細分化論証エクスプローラー</h1>
+          <span class="subtitle">座標インデックスによる立場別通読・符号反転比較・参考文献・議論コメント</span>
+        </div>
+
+        <div class="admin-bar">
+          <span id="admin-badge" class="admin-badge" hidden>管理者モード</span>
+          <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 主張段階を追加</button>
+          <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規論証を追加</button>
+          <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
+          <button type="button" id="login-open-btn" class="admin-auth-btn">管理者ログイン</button>
+          <button type="button" id="logout-btn" class="admin-auth-btn" hidden>ログアウト</button>
+        </div>
+      </div>
+
+      <nav id="stage-tabs" class="stage-tabs" aria-label="主張段階の切替"></nav>
+
+      <div class="controls">
+        <div class="mode-group" role="group" aria-label="表示モード">
+          <button type="button" class="mode-btn" data-mode="plus">+ 肯定まとめ</button>
+          <button type="button" class="mode-btn" data-mode="minus">- 反論まとめ</button>
+          <button type="button" class="mode-btn" data-mode="split">⇄ 並置比較</button>
+        </div>
+
+        <input
+          id="search-input"
+          class="search-input"
+          type="search"
+          placeholder="座標 (例: 1.21) やキーワード・参考文献で検索..."
+          aria-label="論証を検索"
+        />
+
+        <button type="button" id="back-btn" class="back-btn" disabled>
+          ↩ 元の論証へ戻る
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="status-notice" class="status-notice" hidden></div>
+    <section id="stage-banner" class="stage-banner" aria-live="polite"></section>
+
+    <main class="layout">
+      <section id="argument-list" class="argument-list" aria-label="論証一覧"></section>
+      <aside id="compare-panel" class="compare-panel" aria-label="1対1対照比較・参考文献・コメント"></aside>
+    </main>
+  </div>
+
+  <!-- 管理者ログイン用ダイアログ -->
+  <dialog id="login-dialog" class="modal">
+    <form id="login-form" class="modal-form">
+      <div class="modal-head">
+        <h2>管理者ログイン</h2>
+        <button type="button" class="modal-close js-close-dialog">✕</button>
+      </div>
+      <label class="field">
+        <span>メールアドレス</span>
+        <input type="email" id="login-email" required autocomplete="username" />
+      </label>
+      <label class="field">
+        <span>パスワード</span>
+        <input type="password" id="login-password" required autocomplete="current-password" />
+      </label>
+      <p id="login-error" class="form-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
+        <button type="submit" class="btn-primary">ログイン</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 論証の追加・編集用ダイアログ（管理者専用） -->
+  <dialog id="arg-dialog" class="modal modal-wide">
+    <form id="arg-form" class="modal-form">
+      <div class="modal-head">
+        <h2 id="arg-dialog-title">論証を編集</h2>
+        <button type="button" class="modal-close js-close-dialog">✕</button>
+      </div>
+
+      <div class="form-grid-2">
+        <label class="field">
+          <span>座標（例：1.10 / 5.10）</span>
+          <input type="text" id="arg-coord" required placeholder="1.10" />
+        </label>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label for="arg-stage">主張段階</label>
+            <button type="button" id="inline-add-stage-btn" class="inline-link-btn">+ 段階を新規追加</button>
+          </div>
+          <select id="arg-stage" required></select>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>トピック見出し（例：1.1x 快苦の非対称性と生の質）</span>
+        <input type="text" id="arg-topic" required />
+      </label>
+
+      <div class="form-grid-2">
+        <div class="edit-box is-plus">
+          <h3>肯定側 (+)</h3>
+          <label class="field">
+            <span>見出し</span>
+            <input type="text" id="arg-plus-title" required />
+          </label>
+          <label class="field">
+            <span>本文</span>
+            <textarea id="arg-plus-body" rows="5" required></textarea>
+          </label>
+        </div>
+
+        <div class="edit-box is-minus">
+          <h3>反論側 (-)</h3>
+          <label class="field">
+            <span>見出し</span>
+            <input type="text" id="arg-minus-title" required />
+          </label>
+          <label class="field">
+            <span>本文</span>
+            <textarea id="arg-minus-body" rows="5" required></textarea>
+          </label>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>前提論証の座標（カンマ区切り・任意 例：1.10, 1.21）</span>
+        <input type="text" id="arg-refs" placeholder="1.10, 1.21" />
+      </label>
+
+      <p id="arg-error" class="form-error" hidden></p>
+
+      <div class="modal-actions is-between">
+        <button type="button" id="arg-delete-btn" class="btn-danger" hidden>この座標を削除</button>
+        <div class="modal-actions-right">
+          <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
+          <button type="submit" class="btn-primary">保存する</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 主張段階の追加・編集用ダイアログ（管理者専用） -->
+  <dialog id="stage-dialog" class="modal">
+    <form id="stage-form" class="modal-form">
+      <div class="modal-head">
+        <h2 id="stage-dialog-title">主張段階を追加</h2>
+        <button type="button" class="modal-close js-close-dialog">✕</button>
+      </div>
+
+      <div class="form-grid-2">
+        <label class="field">
+          <span>段階番号（例：5）</span>
+          <input type="text" id="stage-id" required placeholder="5" />
+        </label>
+        <label class="field">
+          <span>タブ表示名</span>
+          <input type="text" id="stage-label" required placeholder="5. 法的・制度的実装" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span>肯定側の基本主張 (+N)</span>
+        <textarea id="stage-plus" rows="3" required placeholder="(+5) ..."></textarea>
+      </label>
+
+      <label class="field">
+        <span>反論側の基本主張 (-N)</span>
+        <textarea id="stage-minus" rows="3" required placeholder="(-5) ..."></textarea>
+      </label>
+
+      <p id="stage-error" class="form-error" hidden></p>
+
+      <div class="modal-actions is-between">
+        <button type="button" id="stage-delete-btn" class="btn-danger" hidden>この段階を削除</button>
+        <div class="modal-actions-right">
+          <button type="button" class="btn-secondary js-close-dialog">キャンセル</button>
+          <button type="submit" class="btn-primary">保存する</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
