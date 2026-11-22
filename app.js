@@ -6,7 +6,7 @@ import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
 const DEFAULT_TOPIC = { id: "antinatalism", title: "反出生主義と反論：細分化論証エクスプローラー", plusLabel: "肯定側", minusLabel: "反論側", order: 1, useLegacyRoot: true };
-const DEFAULT_PROFILE = { name: "", role: "", bio: "", interests: [], links: [], contact: "" };
+const DEFAULT_PROFILE = { name: "", role: "" };
 
 const isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("ここに");
 let auth = null;
@@ -43,8 +43,7 @@ const els = {
   adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), seedDbBtn: $("seed-db-btn"),
   loginOpenBtn: $("login-open-btn"), logoutBtn: $("logout-btn"),
   loginDialog: $("login-dialog"), loginForm: $("login-form"), loginEmail: $("login-email"), loginPassword: $("login-password"), loginError: $("login-error"),
-  profileDialog: $("profile-dialog"), profileForm: $("profile-form"), profileName: $("profile-name"), profileRole: $("profile-role"),
-  profileBio: $("profile-bio"), profileInterests: $("profile-interests"), profileLinks: $("profile-links"), profileContact: $("profile-contact"), profileError: $("profile-error"),
+  profileDialog: $("profile-dialog"), profileForm: $("profile-form"), profileName: $("profile-name"), profileRole: $("profile-role"), profileError: $("profile-error"),
   topicDialog: $("topic-dialog"), topicDialogTitle: $("topic-dialog-title"), topicForm: $("topic-form"), topicId: $("topic-id"),
   topicTitle: $("topic-title"), topicPlusLabel: $("topic-plus-label"), topicMinusLabel: $("topic-minus-label"), topicDeleteBtn: $("topic-delete-btn"), topicError: $("topic-error"),
   argDialog: $("arg-dialog"), argDialogTitle: $("arg-dialog-title"), argForm: $("arg-form"), argCoord: $("arg-coord"), argStage: $("arg-stage"),
@@ -68,10 +67,8 @@ const stripBasicCoordPrefix = (text) => {
 };
 
 const normalizeProfile = (raw = {}) => ({
-  name: String(raw.name ?? "").trim(), role: String(raw.role ?? "").trim(), bio: String(raw.bio ?? "").trim(),
-  interests: Array.isArray(raw.interests) ? raw.interests.filter(Boolean) : [],
-  links: Array.isArray(raw.links) ? raw.links.filter((l) => l && safeUrl(l.url)).map((l) => ({ label: String(l.label ?? l.url).trim(), url: safeUrl(l.url) })) : [],
-  contact: String(raw.contact ?? "").trim()
+  name: String(raw.name ?? "").trim(),
+  role: String(raw.role ?? "").trim()
 });
 
 const normalizeTopic = (raw) => {
@@ -478,13 +475,13 @@ function renderPageVisibility() {
   els.topTopicControls.hidden = !isExplorer;
   els.topPageLabel.hidden = isExplorer;
   if (isGuide) els.topPageLabel.textContent = "このサイトの使い方";
-  else if (isProfile) els.topPageLabel.textContent = "管理者プロフィール";
+  else if (isProfile) els.topPageLabel.textContent = "管理者ページ";
   els.explorerHeaderPanel.hidden = !isExplorer;
   els.explorerView.hidden = !isExplorer;
   els.guideView.hidden = !isGuide;
   els.profileView.hidden = !isProfile;
   const t = getCurrentTopic();
-  document.title = isGuide ? `使い方 | ${t.title}` : isProfile ? `プロフィール | ${t.title}` : t.title;
+  document.title = isGuide ? `使い方 | ${t.title}` : isProfile ? `管理者ページ | ${t.title}` : t.title;
 }
 
 function renderAdminCommentsSection() {
@@ -551,21 +548,23 @@ function renderAdminCommentsSection() {
 
 function renderProfilePage() {
   const p = state.profile;
-  const has = Boolean(p.name || p.role || p.bio || p.interests.length || p.links.length || p.contact);
-  const editBtn = state.isAdmin ? `<button type="button" class="admin-action-btn js-open-profile-edit">プロフィールを編集</button>` : "";
+  const editBtn = state.isAdmin ? `<button type="button" class="admin-action-btn js-open-profile-edit">管理者情報を編集</button>` : "";
   const commentsHtml = renderAdminCommentsSection();
-  if (!has) {
-    els.profileContent.innerHTML = `<header class="doc-header"><div class="doc-header-row"><div><h2>管理者プロフィール</h2><p class="doc-lead">このサイトの運営者情報・管理者への連絡欄</p></div>${editBtn}</div></header>
-      <div class="empty-state">${state.isAdmin ? "プロフィールはまだ登録されていません。右上の「プロフィールを編集」から作成できます。" : "管理者のプロフィールはまだ登録されていません。"}</div>
-      ${commentsHtml}<div class="doc-footer-actions"><button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button></div>`;
-    return;
-  }
-  const interests = p.interests.length ? `<section class="doc-section"><h3>関心領域・テーマ</h3><div class="interest-tags">${p.interests.map((t) => `<span class="interest-tag">${escapeHtml(t)}</span>`).join("")}</div></section>` : "";
-  const links = p.links.length ? `<section class="doc-section"><h3>外部リンク</h3><ul class="profile-links">${p.links.map((l) => `<li class="profile-link-item"><a href="${escapeHtml(l.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.label)} ↗</a></li>`).join("")}</ul></section>` : "";
-  const contact = p.contact ? `<section class="doc-section"><h3>連絡先・メモ</h3><p class="profile-bio">${escapeHtml(p.contact)}</p></section>` : "";
-  els.profileContent.innerHTML = `<header class="doc-header"><div class="doc-header-row"><div><h2>${escapeHtml(p.name || "管理者プロフィール")}</h2>${p.role ? `<p class="profile-role">${escapeHtml(p.role)}</p>` : ""}</div>${editBtn}</div></header>
-    ${p.bio ? `<section class="doc-section"><h3>自己紹介</h3><p class="profile-bio">${escapeHtml(p.bio)}</p></section>` : ""}${interests}${links}${contact}${commentsHtml}
-    <div class="doc-footer-actions"><button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button></div>`;
+
+  els.profileContent.innerHTML = `
+    <header class="doc-header">
+      <div class="doc-header-row">
+        <div>
+          <h2>${escapeHtml(p.name || "管理者ページ")}</h2>
+          ${p.role ? `<p class="profile-role">${escapeHtml(p.role)}</p>` : ""}
+        </div>
+        ${editBtn}
+      </div>
+    </header>
+    ${commentsHtml}
+    <div class="doc-footer-actions">
+      <button type="button" class="btn-primary js-go-explorer">← 命題一覧へ戻る</button>
+    </div>`;
 }
 
 function renderTopicBar() {
@@ -837,10 +836,6 @@ function openProfileDialog() {
   els.profileError.hidden = true;
   els.profileName.value = p.name;
   els.profileRole.value = p.role;
-  els.profileBio.value = p.bio;
-  els.profileInterests.value = p.interests.join(", ");
-  els.profileLinks.value = p.links.map((l) => (l.label && l.label !== l.url ? `${l.label} | ${l.url}` : l.url)).join("\n");
-  els.profileContact.value = p.contact;
   els.profileDialog.showModal();
 }
 function openTopicDialog(topicId = null) {
@@ -945,17 +940,21 @@ els.profileForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!db || !state.isAdmin) return;
   els.profileError.hidden = true;
-  const interests = els.profileInterests.value.split(/[,、]/).map((s) => s.trim()).filter(Boolean);
-  const links = [];
-  for (const line of els.profileLinks.value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
-    const [labelPart, ...urlParts] = line.includes("|") ? line.split("|") : [line, line];
-    const url = safeUrl(urlParts.join("|"));
-    if (!url) { els.profileError.textContent = `外部リンクのURLが正しくありません：${line}`; els.profileError.hidden = false; return; }
-    links.push({ label: labelPart.trim() || url, url });
+  const payload = {
+    name: els.profileName.value.trim(),
+    role: els.profileRole.value.trim(),
+    updatedAt: serverTimestamp()
+  };
+  try {
+    await setDoc(doc(db, "siteMeta", "profile"), payload);
+    state.profile = normalizeProfile(payload);
+    els.profileDialog.close();
+    renderProfilePage();
+  } catch (err) {
+    console.error(err);
+    els.profileError.textContent = "保存に失敗しました。Firestoreのルールを確認してください。";
+    els.profileError.hidden = false;
   }
-  const payload = { name: els.profileName.value.trim(), role: els.profileRole.value.trim(), bio: els.profileBio.value.trim(), interests, links, contact: els.profileContact.value.trim(), updatedAt: serverTimestamp() };
-  try { await setDoc(doc(db, "siteMeta", "profile"), payload); state.profile = normalizeProfile(payload); els.profileDialog.close(); renderProfilePage(); }
-  catch (err) { console.error(err); els.profileError.textContent = "保存に失敗しました。Firestoreのルールを確認してください。"; els.profileError.hidden = false; }
 });
 
 els.profileContent.addEventListener("click", async (e) => {
