@@ -4,8 +4,8 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, dele
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 
 // ★管理者へのコメント投稿時にメール通知を送るための Formspree エンドポイントURL
-// 例: "https://formspree.io/f/xxxxxxxx" （空欄の場合は通知をスキップします）
-const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
+// 例: "https://formspree.io/f/xdegwegn" （空欄の場合は通知をスキップします）
+const ADMIN_NOTIFY_ENDPOINT = "";
 const TOPIC_COMMENT_COORD = "__topic__";
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
@@ -152,18 +152,35 @@ const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; };
 
 // === 管理者コメントの対象解決・ジャンプ ===
+function buildAdminTargetRef(topicId, coord) {
+  const cleanCoord = String(coord ?? "").trim();
+  const topicTitle = topicId ? (findTopic(topicId)?.title || topicId) : "";
+  if (!topicTitle) return cleanCoord.slice(0, 80);
+  if (!cleanCoord) return topicTitle.slice(0, 80);
+  const suffix = ` / ${cleanCoord}`;
+  const maxTitleLen = Math.max(0, 80 - suffix.length);
+  return `${topicTitle.slice(0, maxTitleLen)}${suffix}`;
+}
+
 function resolveAdminCommentTarget(c) {
   let topicId = String(c.targetTopicId ?? "").trim();
   let coord = String(c.targetCoord ?? "").trim();
   const refText = String(c.targetRef ?? "").trim();
 
-  if (!topicId && refText) {
-    const matchedTopic = state.topics.find((t) => refText.includes(t.title) || refText.includes(t.id));
-    if (matchedTopic) topicId = matchedTopic.id;
-  }
-  if (!coord && refText) {
-    const m = refText.match(/[+-]?\d+\.\d+[a-zA-Z]?/);
-    if (m) coord = m[0];
+  if (refText) {
+    const parts = refText.split(" / ").map((s) => s.trim()).filter(Boolean);
+    if (!topicId) {
+      const matched =
+        state.topics.find((t) => parts.some((p) => p === t.title || p === t.id)) ||
+        state.topics.find((t) => refText.includes(t.title) || refText.includes(t.id)) ||
+        state.topics.find((t) => parts[0] && parts[0].length >= 2 && t.title.startsWith(parts[0]));
+      if (matched) topicId = matched.id;
+    }
+    if (!coord) {
+      const coordCandidate = parts.length > 1 ? parts[parts.length - 1] : refText;
+      const m = coordCandidate.match(/[+-]?\d+\.\d+[a-zA-Z]?/);
+      if (m) coord = m[0];
+    }
   }
   if (!topicId && coord) topicId = state.currentTopicId;
 
@@ -1201,17 +1218,14 @@ els.profileContent.addEventListener("submit", async (e) => {
     if (!isCommentOwner(t)) return;
     const body = e.target.elements.body.value.trim();
     if (!body) return;
-    const targetTopicId = e.target.elements.targetTopicId.value;
-    const targetCoord = e.target.elements.targetCoord.value.trim();
-    const topicTitle = targetTopicId ? (findTopic(targetTopicId)?.title || targetTopicId) : "";
-    const targetRef = [topicTitle, targetCoord].filter(Boolean).join(" / ");
+    const targetRef = buildAdminTargetRef(e.target.elements.targetTopicId.value, e.target.elements.targetCoord.value);
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = "保存中...";
     try {
       await updateDoc(doc(db, "adminComments", id), {
         author: e.target.elements.author.value.trim() || "匿名",
         category: e.target.elements.category.value,
-        targetTopicId, targetCoord, targetRef, body,
+        targetRef, body,
         updatedAt: serverTimestamp()
       });
       state.editingAdminCommentId = null;
@@ -1227,17 +1241,14 @@ els.profileContent.addEventListener("submit", async (e) => {
     const body = bodyEl.value.trim();
     if (!body) return;
     const category = $("admin-comment-category").value;
-    const targetTopicId = topicEl.value;
-    const targetCoord = coordEl.value.trim();
-    const topicTitle = targetTopicId ? (findTopic(targetTopicId)?.title || targetTopicId) : "";
-    const targetRef = [topicTitle, targetCoord].filter(Boolean).join(" / ");
+    const targetRef = buildAdminTargetRef(topicEl.value, coordEl.value);
     const author = $("admin-comment-author").value.trim() || "匿名";
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = "送信中...";
     try {
       const uid = await ensureSignedInUid();
       await addDoc(collection(db, "adminComments"), {
-        category, targetTopicId, targetCoord, targetRef, author, body,
+        category, targetRef, author, body,
         authorUid: uid, createdAt: serverTimestamp()
       });
       bodyEl.value = ""; coordEl.value = ""; topicEl.value = "";
