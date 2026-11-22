@@ -40,6 +40,7 @@ let referencedByMap = new Map();
 const $ = (id) => document.getElementById(id);
 
 const els = {
+  siteHeader: document.querySelector(".site-header"),
   menuOpenBtn: $("menu-open-btn"), menuCloseBtn: $("menu-close-btn"), navDrawer: $("nav-drawer"), navBackdrop: $("nav-backdrop"),
   drawerNavButtons: document.querySelectorAll(".drawer-nav-btn"), drawerAdminStatus: $("drawer-admin-status"),
   topTopicControls: $("top-topic-controls"), topPageLabel: $("top-page-label"),
@@ -159,6 +160,77 @@ const findStage = (id) => state.stages.find((s) => s.id === String(id));
 const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; };
+
+// === スマホ用スマート固定ヘッダー（下スクロールで隠し、上スクロールで再表示） ===
+function showSiteHeader() {
+  els.siteHeader?.classList.remove("is-header-hidden");
+}
+
+function initMobileSmartHeader() {
+  const header = els.siteHeader;
+  if (!header) return;
+  let lastY = Math.max(0, window.scrollY);
+  let upAccum = 0;
+  let downAccum = 0;
+  let ticking = false;
+  const SHOW_UP_THRESHOLD = 48;   // 上方向へ48px以上スクロールで再表示
+  const HIDE_DOWN_THRESHOLD = 20; // 下方向へ20px以上スクロールで非表示
+
+  const update = () => {
+    ticking = false;
+    if (!isMobileViewport() || state.page !== "explorer" || state.detailOpen || state.drawerOpen) {
+      header.classList.remove("is-header-hidden");
+      lastY = Math.max(0, window.scrollY);
+      upAccum = 0;
+      downAccum = 0;
+      return;
+    }
+
+    const currentY = Math.max(0, window.scrollY);
+    const delta = currentY - lastY;
+    lastY = currentY;
+
+    const activeEl = document.activeElement;
+    const isEditingInHeader = Boolean(
+      activeEl &&
+      header.contains(activeEl) &&
+      ["INPUT", "TEXTAREA", "SELECT"].includes(activeEl.tagName)
+    );
+
+    if (currentY <= 16 || isEditingInHeader) {
+      header.classList.remove("is-header-hidden");
+      upAccum = 0;
+      downAccum = 0;
+      return;
+    }
+
+    if (delta > 0) {
+      downAccum += delta;
+      upAccum = 0;
+      const hideAfterY = Math.max(80, header.offsetHeight);
+      if (currentY > hideAfterY && downAccum >= HIDE_DOWN_THRESHOLD) {
+        header.classList.add("is-header-hidden");
+      }
+    } else if (delta < 0) {
+      upAccum += -delta;
+      downAccum = 0;
+      if (upAccum >= SHOW_UP_THRESHOLD) {
+        header.classList.remove("is-header-hidden");
+      }
+    }
+  };
+
+  window.addEventListener("scroll", () => {
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(update);
+    }
+  }, { passive: true });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileViewport()) showSiteHeader();
+  });
+}
 
 // === テキストバックアップの作成（エクスポート）と復元（インポート） ===
 async function fetchTopicBundleForBackup(topic) {
@@ -694,6 +766,7 @@ async function jumpToAdminCommentTarget(topicId, coordToken) {
     }
   }
   state.page = "explorer";
+  showSiteHeader();
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -844,6 +917,7 @@ function focusCard(coord) {
 // === ドロワー・ページ切替・詳細ビュー ===
 function openNavDrawer() {
   state.drawerOpen = true;
+  showSiteHeader();
   els.navBackdrop.hidden = false;
   els.navDrawer.classList.add("is-open");
   els.navDrawer.setAttribute("aria-hidden", "false");
@@ -865,6 +939,7 @@ const applyDetailBodyClass = () => {
 function switchPage(nextPage) {
   if (!["explorer", "guide", "profile"].includes(nextPage)) return;
   closeNavDrawer();
+  showSiteHeader();
   state.page = nextPage;
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
@@ -884,6 +959,7 @@ function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false 
   state.selectedCoord = coord;
   state.editingCommentId = null;
   state.detailOpen = true;
+  showSiteHeader();
   applyDetailBodyClass();
   renderPageVisibility();
   if (pushBrowserHistory && !wasOpen) {
@@ -904,6 +980,7 @@ function closeDetailView({ restoreScroll = true } = {}) {
   state.detailOpen = false;
   state.pushedDetailHistory = false;
   state.editingCommentId = null;
+  showSiteHeader();
   applyDetailBodyClass();
   renderAll();
   if (restoreScroll) requestAnimationFrame(() => window.scrollTo({ top: state.savedListScrollY, behavior: "instant" }));
@@ -1064,6 +1141,7 @@ async function switchTopic(topicId) {
   state.commentCounts = {};
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
+  showSiteHeader();
   if (state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
   await Promise.all([loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
   loadEvaluations();
@@ -1071,6 +1149,7 @@ async function switchTopic(topicId) {
   const first = state.stage !== "all" ? state.arguments.find((a) => a.stage === state.stage) || state.arguments[0] : state.arguments[0];
   state.selectedCoord = first ? first.coord : "";
   renderAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
   await loadCommentsForCoord(state.selectedCoord);
 }
 
@@ -1996,6 +2075,7 @@ els.stageTabs.addEventListener("click", (e) => {
     const first = state.arguments.find((a) => a.stage === state.stage);
     if (first) { state.selectedCoord = first.coord; loadCommentsForCoord(first.coord); }
   }
+  showSiteHeader();
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -2005,6 +2085,7 @@ els.stageBanner.addEventListener("click", (e) => {
 });
 els.modeButtons.forEach((b) => b.addEventListener("click", () => {
   state.mode = b.dataset.mode;
+  showSiteHeader();
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }));
@@ -2111,6 +2192,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
 });
 
 async function init() {
+  initMobileSmartHeader();
   if (auth) {
     onAuthStateChanged(auth, (user) => {
       state.currentUid = user ? user.uid : null;
