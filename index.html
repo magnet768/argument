@@ -37,7 +37,6 @@
         <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 水準を追加</button>
         <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規命題を追加</button>
         <button type="button" id="backup-open-btn" class="admin-action-btn is-secondary" hidden>バックアップ / 復元</button>
-        <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
       </div>
 
       <nav id="stage-tabs" class="stage-tabs" aria-label="水準の切替"></nav>
@@ -107,8 +106,8 @@
           </div>
           <ul class="doc-list">
             <li><strong>符号（<code>+</code> / <code>-</code>）</strong>：対立する2つの立場を表します。同じ番号で符号を反転させた命題どうしが、1対1で直接対立するペアになっています。</li>
-            <li><strong>整数部（<code>1</code>, <code>2</code>, ...）</strong>：上部タブに対応する「水準」を表します（例：理想論の水準、実践規範の水準など）。</li>
-            <li><strong>小数第一位（<code>.0</code>, <code>.1</code>, ...）</strong>：<code>.0</code> はその水準の基本命題、<code>.1</code> 以降はその水準の中でのトピック群（価値論、同意、義務論など）を表します。</li>
+            <li><strong>整数部（<code>1</code>, <code>2</code>, ...）</strong>：上部タブに対応する「水準」を表します（例：意味論・真理の水準、認識論的水準など）。</li>
+            <li><strong>小数第一位（<code>.0</code>, <code>.1</code>, ...）</strong>：<code>.0</code> はその水準の基本命題、<code>.1</code> 以降はその水準の中でのトピック群（自己論駁、概念枠、正当化など）を表します。</li>
             <li><strong>小数第二位（<code>.00</code>, <code>.10</code>, <code>.11</code>, ...）</strong>：<code>0</code> がそのトピックの基底命題、<code>1</code> 以降がさらに細分化された分岐命題です。</li>
           </ul>
         </div>
@@ -236,7 +235,7 @@
           <select id="arg-stage" required></select>
         </div>
       </div>
-      <label class="field"><span>トピック見出し（例：1.1x 快苦の非対称性と生の質）</span><input type="text" id="arg-topic" required /></label>
+      <label class="field"><span>トピック見出し（例：1.1x 自己論駁と真理の相対化）</span><input type="text" id="arg-topic" required /></label>
       <div class="form-grid-2">
         <div class="edit-box is-plus">
           <h3 id="arg-plus-heading">肯定側 (+)</h3>
@@ -269,7 +268,7 @@
       </div>
       <div class="form-grid-2">
         <label class="field"><span>水準番号（例：1）</span><input type="text" id="stage-id" required placeholder="1" /></label>
-        <label class="field"><span>タブ表示名</span><input type="text" id="stage-label" required placeholder="1. 価値論的水準" /></label>
+        <label class="field"><span>タブ表示名</span><input type="text" id="stage-label" required placeholder="1. 意味論・真理の水準" /></label>
       </div>
       <label class="field"><span id="stage-plus-label-text">肯定側の基本命題 (+N.00)</span><textarea id="stage-plus" rows="3" required placeholder="(+1.00) ..."></textarea></label>
       <label class="field"><span id="stage-minus-label-text">反論側の基本命題 (-N.00)</span><textarea id="stage-minus" rows="3" required placeholder="(-1.00) ..."></textarea></label>
