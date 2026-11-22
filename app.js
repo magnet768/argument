@@ -4,8 +4,8 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, dele
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 
 // ★管理者へのコメント投稿時にメール通知を送るための Formspree エンドポイントURL
-// 例: "https://formspree.io/f/xxxxxxxx" （空欄の場合は通知をスキップします）
-const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
+// 例: "https://formspree.io/f/xdegwegn" （空欄の場合は通知をスキップします）
+const ADMIN_NOTIFY_ENDPOINT = "";
 const TOPIC_COMMENT_COORD = "__topic__";
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
@@ -48,7 +48,7 @@ const els = {
   stageTabs: $("stage-tabs"), stageBanner: $("stage-banner"), argList: $("argument-list"), comparePanel: $("compare-panel"),
   topicCommentsSection: $("topic-comments-section"),
   searchInput: $("search-input"), modeButtons: document.querySelectorAll(".mode-btn"), statusNotice: $("status-notice"),
-  adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), seedDbBtn: $("seed-db-btn"),
+  adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), backupOpenBtn: $("backup-open-btn"), seedDbBtn: $("seed-db-btn"),
   loginOpenBtn: $("login-open-btn"), logoutBtn: $("logout-btn"),
   loginDialog: $("login-dialog"), loginForm: $("login-form"), loginEmail: $("login-email"), loginPassword: $("login-password"), loginError: $("login-error"),
   profileDialog: $("profile-dialog"), profileForm: $("profile-form"), profileName: $("profile-name"), profileRole: $("profile-role"), profileError: $("profile-error"),
@@ -60,7 +60,10 @@ const els = {
   argRefs: $("arg-refs"), argDeleteBtn: $("arg-delete-btn"), argError: $("arg-error"),
   stageDialog: $("stage-dialog"), stageDialogTitle: $("stage-dialog-title"), stageForm: $("stage-form"), stageId: $("stage-id"),
   stageLabel: $("stage-label"), stagePlusLabelText: $("stage-plus-label-text"), stageMinusLabelText: $("stage-minus-label-text"),
-  stagePlus: $("stage-plus"), stageMinus: $("stage-minus"), stageDeleteBtn: $("stage-delete-btn"), stageError: $("stage-error")
+  stagePlus: $("stage-plus"), stageMinus: $("stage-minus"), stageDeleteBtn: $("stage-delete-btn"), stageError: $("stage-error"),
+  backupDialog: $("backup-dialog"), backupExportCurrentBtn: $("backup-export-current-btn"), backupExportAllBtn: $("backup-export-all-btn"),
+  backupFileInput: $("backup-file-input"), backupImportText: $("backup-import-text"), backupPreview: $("backup-preview"),
+  backupError: $("backup-error"), backupRestoreBtn: $("backup-restore-btn")
 };
 
 const isMobileViewport = () => window.matchMedia("(max-width: 980px)").matches;
@@ -156,6 +159,472 @@ const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; };
 
+// === テキストバックアップの作成（エクスポート）と復元（インポート） ===
+async function fetchTopicBundleForBackup(topic) {
+  const legacy = Boolean(topic.useLegacyRoot);
+  if (!db) {
+    return {
+      topic,
+      stages: legacy ? getDefaultStagesList() : [],
+      arguments: legacy ? DEFAULT_ARGUMENTS.map(normalizeArg).sort((a, b) => compareNatural(a.coord, b.coord)) : []
+    };
+  }
+  const [stSnap, argSnap] = await Promise.all([
+    getDocs(stagesCollection(topic.id)),
+    getDocs(argumentsCollection(topic.id))
+  ]);
+  let stages = [];
+  if (stSnap.empty) stages = legacy ? getDefaultStagesList() : [];
+  else {
+    stSnap.forEach((d) => stages.push(normalizeStage({ id: d.id, ...d.data() })));
+    stages.sort((a, b) => compareNatural(a.id, b.id));
+  }
+  let args = [];
+  if (argSnap.empty) args = legacy ? DEFAULT_ARGUMENTS.map(normalizeArg) : [];
+  else argSnap.forEach((d) => args.push(normalizeArg({ coord: d.id, ...d.data() })));
+  args.sort((a, b) => compareNatural(a.coord, b.coord));
+  return { topic, stages, arguments: args };
+}
+
+function serializeBackupBundlesToMarkdown(bundles) {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const lines = [
+    "# 双方向インデックス論証エクスプローラー バックアップ",
+    `出力日時: ${stamp}`,
+    ""
+  ];
+
+  for (const { topic, stages, arguments: args } of bundles) {
+    lines.push("================================================================================");
+    lines.push(`# 論題: ${topic.title}`);
+    lines.push(`- 論題ID: ${topic.id}`);
+    lines.push(`- +側呼称: ${topic.plusLabel}`);
+    lines.push(`- -側呼称: ${topic.minusLabel}`);
+    lines.push(`- 表示順: ${topic.order}`);
+    lines.push("");
+
+    const stageIds = new Set(stages.map((s) => s.id));
+    const argsByStage = new Map();
+    for (const s of stages) argsByStage.set(s.id, []);
+    const orphanArgs = [];
+    for (const a of args) {
+      if (stageIds.has(a.stage)) argsByStage.get(a.stage).push(a);
+      else orphanArgs.push(a);
+    }
+
+    const pushArgBlock = (item) => {
+      lines.push(`### 座標 ${item.coord} | トピック: ${item.topic}`);
+      if (item.refs.length > 0) lines.push(`- 前提: ${item.refs.join(", ")}`);
+      lines.push("");
+      lines.push(`#### +${item.coord} ${item.plusTitle}`.trimEnd());
+      lines.push(item.plusBody);
+      lines.push("");
+      lines.push(`#### -${item.coord} ${item.minusTitle}`.trimEnd());
+      lines.push(item.minusBody);
+      lines.push("");
+      if (item.bibliography.length > 0) {
+        lines.push("#### 参考文献");
+        for (const b of item.bibliography) {
+          lines.push(`- ${b.citation}`);
+          if (b.url) lines.push(`  - URL: ${b.url}`);
+          if (b.note) lines.push(`  - メモ: ${b.note}`);
+        }
+        lines.push("");
+      }
+      lines.push("---");
+      lines.push("");
+    };
+
+    for (const st of stages) {
+      lines.push(`## 水準 ${st.id}: ${st.label}`);
+      lines.push("");
+      if (st.plus) {
+        lines.push(`#### +${st.id}.00 基本命題`);
+        lines.push(formatBasicProp(st.plus));
+        lines.push("");
+      }
+      if (st.minus) {
+        lines.push(`#### -${st.id}.00 基本命題`);
+        lines.push(formatBasicProp(st.minus));
+        lines.push("");
+      }
+      for (const item of argsByStage.get(st.id) || []) pushArgBlock(item);
+    }
+
+    if (orphanArgs.length > 0) {
+      const grouped = new Map();
+      for (const a of orphanArgs) {
+        if (!grouped.has(a.stage)) grouped.set(a.stage, []);
+        grouped.get(a.stage).push(a);
+      }
+      for (const [sid, list] of grouped.entries()) {
+        lines.push(`## 水準 ${sid}: 水準 ${sid}`);
+        lines.push("");
+        for (const item of list) pushArgBlock(item);
+      }
+    }
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+function parseBackupMarkdown(text) {
+  const lines = String(text ?? "").replace(/^\uFEFF/, "").split(/\r?\n/);
+  const bundles = [];
+  let currentBundle = null;
+  let currentStage = null;
+  let currentArg = null;
+  let section = null; // "stagePlus" | "stageMinus" | "argPlus" | "argMinus" | "bib"
+  let buffer = [];
+
+  const flush = () => {
+    if (!section || section === "bib") { buffer = []; return; }
+    let start = 0;
+    let end = buffer.length;
+    while (start < end && buffer[start].trim() === "") start++;
+    while (end > start && buffer[end - 1].trim() === "") end--;
+    const content = buffer.slice(start, end).join("\n");
+    if (section === "stagePlus" && currentStage) currentStage.plus = content;
+    else if (section === "stageMinus" && currentStage) currentStage.minus = content;
+    else if (section === "argPlus" && currentArg) currentArg.plusBody = content;
+    else if (section === "argMinus" && currentArg) currentArg.minusBody = content;
+    buffer = [];
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+
+    if (/^={10,}$/.test(trimmed) || trimmed === "---") {
+      flush();
+      section = null;
+      continue;
+    }
+
+    const topicMatch = trimmed.match(/^#\s+論題[:：]\s*(.+)$/);
+    if (topicMatch) {
+      flush();
+      currentBundle = {
+        topic: {
+          id: "",
+          title: topicMatch[1].trim(),
+          plusLabel: "肯定側",
+          minusLabel: "反論側",
+          order: bundles.length + 1
+        },
+        stages: [],
+        arguments: []
+      };
+      bundles.push(currentBundle);
+      currentStage = null;
+      currentArg = null;
+      section = null;
+      continue;
+    }
+
+    if (!currentBundle) continue;
+
+    const stageMatch = trimmed.match(/^##\s+水準\s+([^\s:：]+)\s*[:：]\s*(.*)$/);
+    if (stageMatch) {
+      flush();
+      currentStage = { id: stageMatch[1].trim(), label: stageMatch[2].trim() || `水準 ${stageMatch[1].trim()}`, plus: "", minus: "" };
+      currentBundle.stages.push(currentStage);
+      currentArg = null;
+      section = null;
+      continue;
+    }
+
+    const coordMatch = trimmed.match(/^###\s+座標\s+([^\s|｜]+)(?:\s*[|｜]\s*トピック[:：]\s*(.*))?$/);
+    if (coordMatch) {
+      flush();
+      const coord = coordMatch[1].trim();
+      const inferredStage = currentStage ? currentStage.id : (coord.split(".")[0] || "1");
+      currentArg = {
+        coord,
+        stage: inferredStage,
+        topic: (coordMatch[2] || "").trim(),
+        plusTitle: "",
+        plusBody: "",
+        minusTitle: "",
+        minusBody: "",
+        refs: [],
+        bibliography: []
+      };
+      currentBundle.arguments.push(currentArg);
+      section = null;
+      continue;
+    }
+
+    if (/^####\s+参考文献\s*$/.test(trimmed)) {
+      flush();
+      section = currentArg ? "bib" : null;
+      continue;
+    }
+
+    const plusHeadMatch = trimmed.match(/^####\s+\+([^\s]+)(?:\s+(.*))?$/);
+    if (plusHeadMatch) {
+      flush();
+      if (currentArg) {
+        currentArg.plusTitle = (plusHeadMatch[2] || "").trim();
+        section = "argPlus";
+      } else if (currentStage) {
+        section = "stagePlus";
+      }
+      continue;
+    }
+
+    const minusHeadMatch = trimmed.match(/^####\s+-([^\s]+)(?:\s+(.*))?$/);
+    if (minusHeadMatch) {
+      flush();
+      if (currentArg) {
+        currentArg.minusTitle = (minusHeadMatch[2] || "").trim();
+        section = "argMinus";
+      } else if (currentStage) {
+        section = "stageMinus";
+      }
+      continue;
+    }
+
+    // 論題のメタ情報
+    if (!currentStage && !currentArg && !section) {
+      const idM = trimmed.match(/^-\s*論題ID[:：]\s*(.+)$/);
+      if (idM) { currentBundle.topic.id = idM[1].trim(); continue; }
+      const plusM = trimmed.match(/^-\s*\+側呼称[:：]\s*(.+)$/);
+      if (plusM) { currentBundle.topic.plusLabel = plusM[1].trim(); continue; }
+      const minusM = trimmed.match(/^-\s*-側呼称[:：]\s*(.+)$/);
+      if (minusM) { currentBundle.topic.minusLabel = minusM[1].trim(); continue; }
+      const orderM = trimmed.match(/^-\s*表示順[:：]\s*(\d+)$/);
+      if (orderM) { currentBundle.topic.order = Number(orderM[1]); continue; }
+    }
+
+    // 命題のメタ情報
+    if (currentArg && !section) {
+      const refM = trimmed.match(/^-\s*前提[:：]\s*(.*)$/);
+      if (refM) {
+        const val = refM[1].trim();
+        if (val && val !== "なし") {
+          currentArg.refs = val.split(/[,、]/).map((s) => s.trim().replace(/^[±+-]/, "")).filter(Boolean);
+        }
+        continue;
+      }
+    }
+
+    // 参考文献
+    if (section === "bib" && currentArg) {
+      const urlM = rawLine.match(/^\s+-\s*URL[:：]\s*(.+)$/i);
+      if (urlM && currentArg.bibliography.length > 0) {
+        currentArg.bibliography[currentArg.bibliography.length - 1].url = urlM[1].trim();
+        continue;
+      }
+      const noteM = rawLine.match(/^\s+-\s*メモ[:：]\s*(.+)$/);
+      if (noteM && currentArg.bibliography.length > 0) {
+        currentArg.bibliography[currentArg.bibliography.length - 1].note = noteM[1].trim();
+        continue;
+      }
+      const citM = rawLine.match(/^-\s+(.+)$/);
+      if (citM) {
+        currentArg.bibliography.push({ citation: citM[1].trim(), url: "", note: "" });
+        continue;
+      }
+      continue;
+    }
+
+    if (section === "stagePlus" || section === "stageMinus" || section === "argPlus" || section === "argMinus") {
+      buffer.push(rawLine);
+    }
+  }
+  flush();
+
+  // バリデーション
+  if (bundles.length === 0) {
+    throw new Error("論題が見つかりませんでした。「# 論題: ...」の形式で記述されたバックアップテキストを指定してください。");
+  }
+  for (const b of bundles) {
+    if (!b.topic.id || !/^[a-zA-Z0-9_-]+$/.test(b.topic.id) || b.topic.id === "guide" || b.topic.id === "profile") {
+      throw new Error(`論題「${b.topic.title}」の論題ID（${b.topic.id || "未設定"}）が不正です。半角英数字・ハイフン・アンダースコアで指定してください。`);
+    }
+    for (const s of b.stages) {
+      if (!s.id || s.id === "all" || s.id.includes("/")) {
+        throw new Error(`論題「${b.topic.title}」の水準番号（${s.id}）が不正です。`);
+      }
+    }
+    for (const a of b.arguments) {
+      if (!a.coord || a.coord.includes("/")) {
+        throw new Error(`論題「${b.topic.title}」の座標（${a.coord}）が不正です。`);
+      }
+    }
+  }
+  return bundles;
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function handleBackupExport(scope) {
+  if (!state.isAdmin) return;
+  els.backupError.hidden = true;
+  const targetBtn = scope === "all" ? els.backupExportAllBtn : els.backupExportCurrentBtn;
+  const origLabel = targetBtn.textContent;
+  targetBtn.disabled = true;
+  targetBtn.textContent = "作成中...";
+  try {
+    const targetTopics = scope === "all" ? state.topics : [getCurrentTopic()];
+    const bundles = [];
+    for (const t of targetTopics) bundles.push(await fetchTopicBundleForBackup(t));
+    const md = serializeBackupBundlesToMarkdown(bundles);
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const fname = scope === "all" ? `arguments-backup-all-${stamp}.md` : `arguments-backup-${targetTopics[0].id}-${stamp}.md`;
+    downloadTextFile(fname, md);
+  } catch (err) {
+    console.error(err);
+    els.backupError.textContent = "バックアップの作成に失敗しました。";
+    els.backupError.hidden = false;
+  } finally {
+    targetBtn.disabled = false;
+    targetBtn.textContent = origLabel;
+  }
+}
+
+function updateBackupPreview() {
+  const raw = els.backupImportText.value.trim();
+  els.backupError.hidden = true;
+  if (!raw) {
+    els.backupPreview.hidden = true;
+    els.backupPreview.textContent = "";
+    return;
+  }
+  try {
+    const bundles = parseBackupMarkdown(raw);
+    const stageCount = bundles.reduce((n, b) => n + b.stages.length, 0);
+    const argCount = bundles.reduce((n, b) => n + b.arguments.length, 0);
+    const names = bundles.map((b) => `「${b.topic.title}」`).join("・");
+    els.backupPreview.textContent = `検出結果：論題 ${bundles.length}件（${names}） / 水準 ${stageCount}件 / 命題 ${argCount}件`;
+    els.backupPreview.hidden = false;
+  } catch (err) {
+    els.backupPreview.hidden = true;
+    els.backupError.textContent = err.message || "バックアップ形式の解析に失敗しました。";
+    els.backupError.hidden = false;
+  }
+}
+
+async function handleBackupRestore() {
+  if (!db || !state.isAdmin) {
+    els.backupError.textContent = "データベースに接続されていないか、管理者権限がありません。";
+    els.backupError.hidden = false;
+    return;
+  }
+  els.backupError.hidden = true;
+  const raw = els.backupImportText.value.trim();
+  if (!raw) {
+    els.backupError.textContent = "復元するバックアップテキストを選択または貼り付けてください。";
+    els.backupError.hidden = false;
+    return;
+  }
+  let bundles;
+  try {
+    bundles = parseBackupMarkdown(raw);
+  } catch (err) {
+    els.backupError.textContent = err.message || "テキストの解析に失敗しました。";
+    els.backupError.hidden = false;
+    return;
+  }
+
+  const stageCount = bundles.reduce((n, b) => n + b.stages.length, 0);
+  const argCount = bundles.reduce((n, b) => n + b.arguments.length, 0);
+  if (!confirm(`論題 ${bundles.length}件・水準 ${stageCount}件・命題 ${argCount}件をデータベースへ復元しますか？（同じID・座標のデータは上書きされます）`)) {
+    return;
+  }
+
+  els.backupRestoreBtn.disabled = true;
+  els.backupRestoreBtn.textContent = "復元中...";
+  try {
+    await ensureTopicsSeededInDb();
+    for (const b of bundles) {
+      const existing = findTopic(b.topic.id);
+      const useLegacyRoot = existing ? Boolean(existing.useLegacyRoot) : (b.topic.id === DEFAULT_TOPIC.id);
+      const topicPayload = {
+        id: b.topic.id,
+        title: b.topic.title,
+        plusLabel: b.topic.plusLabel || "肯定側",
+        minusLabel: b.topic.minusLabel || "反論側",
+        order: b.topic.order,
+        useLegacyRoot,
+        updatedAt: serverTimestamp()
+      };
+      await setDoc(doc(db, "topics", b.topic.id), topicPayload);
+
+      const getStageRef = (sid) => useLegacyRoot ? doc(db, "stages", sid) : doc(db, "topics", b.topic.id, "stages", sid);
+      const getArgRef = (c) => useLegacyRoot ? doc(db, "arguments", c) : doc(db, "topics", b.topic.id, "arguments", c);
+
+      for (const st of b.stages) {
+        await setDoc(getStageRef(st.id), {
+          id: st.id,
+          label: st.label,
+          plus: formatBasicProp(st.plus),
+          minus: formatBasicProp(st.minus),
+          updatedAt: serverTimestamp()
+        });
+      }
+      for (const a of b.arguments) {
+        await setDoc(getArgRef(a.coord), {
+          coord: a.coord,
+          stage: a.stage,
+          topic: a.topic,
+          plusTitle: a.plusTitle,
+          plusBody: a.plusBody,
+          minusTitle: a.minusTitle,
+          minusBody: a.minusBody,
+          refs: a.refs,
+          bibliography: a.bibliography,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+
+    await loadTopics();
+    const nextTopicId = findTopic(state.currentTopicId) ? state.currentTopicId : bundles[0].topic.id;
+    state.currentTopicId = nextTopicId;
+    await Promise.all([loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
+    if (state.stage !== "all" && !findStage(state.stage)) {
+      state.stage = state.stages[0]?.id || "all";
+    }
+    if (!findArg(state.selectedCoord)) {
+      state.selectedCoord = state.arguments[0]?.coord || "";
+    }
+    els.backupDialog.close();
+    renderAll();
+    await loadCommentsForCoord(state.selectedCoord);
+    alert(`復元が完了しました（論題 ${bundles.length}件・水準 ${stageCount}件・命題 ${argCount}件）。`);
+  } catch (err) {
+    console.error(err);
+    els.backupError.textContent = "データベースへの復元に失敗しました。Firestoreのルールと管理者ログイン状態を確認してください。";
+    els.backupError.hidden = false;
+  } finally {
+    els.backupRestoreBtn.disabled = false;
+    els.backupRestoreBtn.textContent = "この内容でDBへ復元";
+  }
+}
+
+function openBackupDialog() {
+  if (!state.isAdmin) return;
+  els.backupError.hidden = true;
+  els.backupPreview.hidden = true;
+  els.backupFileInput.value = "";
+  els.backupImportText.value = "";
+  els.backupDialog.showModal();
+}
+
 // === 管理者コメントの対象解決・ジャンプ ===
 function buildAdminTargetRef(topicId, coord) {
   const cleanCoord = normalizeCoordInput(coord);
@@ -230,25 +699,35 @@ async function jumpToAdminCommentTarget(topicId, coordToken) {
 
 // === 管理者コメント投稿時のメール通知（Formspree） ===
 async function notifyAdminByEmail({ category, targetRef, author, body }) {
-  if (!ADMIN_NOTIFY_ENDPOINT) return;
+  const endpoint = String(ADMIN_NOTIFY_ENDPOINT ?? "").trim();
+  if (!endpoint) return;
   const catLabelMap = {
     bibliography: "参考文献の修正提案",
     correction: "命題・論証の修正提案",
     other: "サイト全体へのご意見・その他"
   };
+  const catLabel = catLabelMap[category] || category || "その他";
+  const targetText = targetRef || "指定なし";
+  const authorText = author || "匿名";
+
+  const formData = new FormData();
+  formData.append("_subject", `【管理者ページ】新しいコメント（${catLabel}）`);
+  formData.append("category", catLabel);
+  formData.append("author", authorText);
+  formData.append("target", targetText);
+  formData.append("message", `【種別】${catLabel}\n【投稿者】${authorText}\n【対象】${targetText}\n\n${body}`);
+  formData.append("page_url", window.location.href);
+
   try {
-    await fetch(ADMIN_NOTIFY_ENDPOINT, {
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        _subject: `【管理者ページ】新しいコメント（${catLabelMap[category] || "その他"}）`,
-        種別: catLabelMap[category] || category,
-        投稿者: author || "匿名",
-        対象の論題と座標: targetRef || "指定なし",
-        本文: body,
-        ページURL: window.location.href
-      })
+      headers: { Accept: "application/json" },
+      body: formData
     });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      console.warn(`管理者メール通知に失敗しました (HTTP ${res.status}):`, detail);
+    }
   } catch (err) {
     console.warn("管理者メール通知の送信に失敗しました:", err);
   }
@@ -822,6 +1301,7 @@ function renderAdminBar() {
   els.addTopicBtn.hidden = !state.isAdmin;
   els.addStageBtn.hidden = !state.isAdmin;
   els.addArgBtn.hidden = !state.isAdmin;
+  els.backupOpenBtn.hidden = !state.isAdmin;
   els.seedDbBtn.hidden = !(state.isAdmin && isLegacyTopic());
   els.logoutBtn.hidden = !state.isAdmin;
   els.loginOpenBtn.hidden = state.isAdmin || !isFirebaseConfigured;
@@ -1266,8 +1746,10 @@ els.profileContent.addEventListener("submit", async (e) => {
         authorUid: uid, createdAt: serverTimestamp()
       });
       bodyEl.value = ""; coordEl.value = ""; topicEl.value = "";
-      notifyAdminByEmail({ category, targetRef, author, body });
-      await loadAdminComments();
+      await Promise.all([
+        notifyAdminByEmail({ category, targetRef, author, body }),
+        loadAdminComments()
+      ]);
     } catch (err) {
       console.error(err);
       alert(err?.code === "auth/operation-not-allowed" ? "Firebase Authentication で「匿名」ログインを有効にしてください。" : "コメントの投稿に失敗しました。");
@@ -1334,6 +1816,25 @@ els.topicCommentsSection.addEventListener("submit", async (e) => {
     } finally { btn.disabled = false; btn.textContent = "論題へコメントを投稿"; }
   }
 });
+
+// === バックアップ / 復元イベント ===
+els.backupOpenBtn.addEventListener("click", openBackupDialog);
+els.backupExportCurrentBtn.addEventListener("click", () => handleBackupExport("current"));
+els.backupExportAllBtn.addEventListener("click", () => handleBackupExport("all"));
+els.backupFileInput.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    els.backupImportText.value = await file.text();
+    updateBackupPreview();
+  } catch (err) {
+    console.error(err);
+    els.backupError.textContent = "ファイルの読み込みに失敗しました。";
+    els.backupError.hidden = false;
+  }
+});
+els.backupImportText.addEventListener("input", updateBackupPreview);
+els.backupRestoreBtn.addEventListener("click", handleBackupRestore);
 
 els.addStageBtn.addEventListener("click", () => openStageDialog(null));
 els.inlineAddStageBtn.addEventListener("click", () => openStageDialog(null));

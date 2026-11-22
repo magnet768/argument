@@ -36,6 +36,7 @@
       <div id="explorer-admin-bar" class="admin-bar explorer-admin-bar" hidden>
         <button type="button" id="add-stage-btn" class="admin-action-btn is-secondary" hidden>+ 水準を追加</button>
         <button type="button" id="add-arg-btn" class="admin-action-btn" hidden>+ 新規命題を追加</button>
+        <button type="button" id="backup-open-btn" class="admin-action-btn is-secondary" hidden>バックアップ / 復元</button>
         <button type="button" id="seed-db-btn" class="admin-action-btn is-secondary" hidden>初期データをDBへ投入</button>
       </div>
 
@@ -281,6 +282,47 @@
         </div>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="backup-dialog" class="modal modal-wide">
+    <div class="modal-form">
+      <div class="modal-head">
+        <h2>論証のバックアップ / 復元</h2>
+        <button type="button" class="modal-close js-close-dialog">✕</button>
+      </div>
+
+      <section style="display:flex;flex-direction:column;gap:8px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;">
+        <h3 style="margin:0;font-size:1rem;">1. テキストデータでバックアップを作成</h3>
+        <p style="margin:0;font-size:0.86rem;color:#64748b;">
+          論証集としてそのまま読めるテキスト形式（<code>.md</code>）で保存します。同じファイルから論題・水準・命題・参考文献を復元できます。
+        </p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">
+          <button type="button" id="backup-export-current-btn" class="btn-secondary">現在の論題を保存 (.md)</button>
+          <button type="button" id="backup-export-all-btn" class="btn-primary">すべての論題を保存 (.md)</button>
+        </div>
+      </section>
+
+      <section style="display:flex;flex-direction:column;gap:10px;padding-top:4px;">
+        <h3 style="margin:0;font-size:1rem;">2. バックアップテキストから復元</h3>
+        <p style="margin:0;font-size:0.86rem;color:#64748b;">
+          保存したファイル（<code>.md</code> / <code>.txt</code>）を読み込むか、テキストを貼り付けてDBへ復元します。同じID・座標は上書きされ、バックアップに含まれない既存データは保持されます。
+        </p>
+        <label class="field">
+          <span>バックアップファイルを選択</span>
+          <input type="file" id="backup-file-input" accept=".md,.txt,text/markdown,text/plain" />
+        </label>
+        <label class="field">
+          <span>復元するテキスト（読み込み後に確認・編集も可能）</span>
+          <textarea id="backup-import-text" rows="10" placeholder="# 論題: ... で始まるバックアップテキストを貼り付けるか、上からファイルを選択してください。"></textarea>
+        </label>
+        <p id="backup-preview" style="margin:0;font-size:0.86rem;color:#334155;" hidden></p>
+        <p id="backup-error" class="form-error" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary js-close-dialog">閉じる</button>
+          <button type="button" id="backup-restore-btn" class="btn-primary">この内容でDBへ復元</button>
+        </div>
+      </section>
+    </div>
   </dialog>
 
   <script src="data.js"></script>
