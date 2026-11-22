@@ -3,6 +3,10 @@ import { getAuth, signInWithEmailAndPassword, signInAnonymously, signOut, onAuth
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 
+// ★管理者へのコメント投稿時にメール通知を送るための Formspree エンドポイントURL
+// 例: "https://formspree.io/f/xxxxxxxx" （空欄の場合は通知をスキップします）
+const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
+
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
 const DEFAULT_TOPIC = { id: "antinatalism", title: "反出生主義と反論：細分化論証エクスプローラー", plusLabel: "肯定側", minusLabel: "反論側", order: 1, useLegacyRoot: true };
@@ -22,6 +26,7 @@ const state = {
   adminComments: [], adminCommentsLoading: false, editingAdminCommentId: null,
   topics: [], topicsInDb: false, currentTopicId: DEFAULT_TOPIC.id,
   stages: [], stagesInDb: false, rawArguments: [], arguments: [],
+  commentCounts: {},
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -142,6 +147,32 @@ const findStage = (id) => state.stages.find((s) => s.id === String(id));
 const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; };
+
+// === 管理者コメント投稿時のメール通知（Formspree） ===
+async function notifyAdminByEmail({ category, targetRef, author, body }) {
+  if (!ADMIN_NOTIFY_ENDPOINT) return;
+  const catLabelMap = {
+    bibliography: "参考文献の修正提案",
+    correction: "命題・論証の修正提案",
+    other: "サイト全体へのご意見・その他"
+  };
+  try {
+    await fetch(ADMIN_NOTIFY_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        _subject: `【管理者ページ】新しいコメント（${catLabelMap[category] || "その他"}）`,
+        種別: catLabelMap[category] || category,
+        投稿者: author || "匿名",
+        対象の論題と座標: targetRef || "指定なし",
+        本文: body,
+        ページURL: window.location.href
+      })
+    });
+  } catch (err) {
+    console.warn("管理者メール通知の送信に失敗しました:", err);
+  }
+}
 
 // === 命題の評価（localStorage 保存・前提→帰結の一方向連動） ===
 const evalStorageKey = (tid = state.currentTopicId) => `arg_explorer_evals_${tid}`;
@@ -403,6 +434,22 @@ async function loadArguments() {
     showNotice("データベースの読み込みに失敗しました。Firebaseの設定とルールを確認してください。");
   }
 }
+async function loadCommentCounts() {
+  if (!db) { state.commentCounts = {}; return; }
+  const tid = state.currentTopicId;
+  try {
+    const snap = await getDocs(commentsCollection(tid));
+    const counts = {};
+    snap.forEach((d) => {
+      const c = String(d.data()?.coord ?? "").trim();
+      if (c) counts[c] = (counts[c] || 0) + 1;
+    });
+    if (state.currentTopicId === tid) state.commentCounts = counts;
+  } catch (err) {
+    console.error(err);
+    if (state.currentTopicId === tid) state.commentCounts = {};
+  }
+}
 async function loadCommentsForCoord(coord) {
   if (!db || !coord) { state.comments = []; state.commentsLoading = false; state.editingCommentId = null; renderComparePanel(); return; }
   const tid = state.currentTopicId;
@@ -414,9 +461,12 @@ async function loadCommentsForCoord(coord) {
     const list = [];
     snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
     list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-    if (state.currentTopicId === tid && state.selectedCoord === coord) state.comments = list;
+    if (state.currentTopicId === tid && state.selectedCoord === coord) {
+      state.comments = list;
+      state.commentCounts[coord] = list.length;
+    }
   } catch (err) { console.error(err); state.comments = []; }
-  finally { state.commentsLoading = false; renderComparePanel(); }
+  finally { state.commentsLoading = false; renderList(); renderComparePanel(); }
 }
 async function switchTopic(topicId) {
   if (!findTopic(topicId)) return;
@@ -424,9 +474,10 @@ async function switchTopic(topicId) {
   state.query = "";
   els.searchInput.value = "";
   state.comments = [];
+  state.commentCounts = {};
   state.editingCommentId = null;
   if (state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
-  await Promise.all([loadStages(), loadArguments()]);
+  await Promise.all([loadStages(), loadArguments(), loadCommentCounts()]);
   loadEvaluations();
   state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
   const first = state.stage !== "all" ? state.arguments.find((a) => a.stage === state.stage) || state.arguments[0] : state.arguments[0];
@@ -447,7 +498,7 @@ async function seedInitialDataToFirestore() {
       const item = normalizeArg(raw);
       await setDoc(argumentDoc(item.coord), { ...item, updatedAt: serverTimestamp() });
     }
-    await Promise.all([loadTopics(), loadStages(), loadArguments()]);
+    await Promise.all([loadTopics(), loadStages(), loadArguments(), loadCommentCounts()]);
     renderAll();
     alert("初期データ（論題・水準・命題）の投入が完了しました。");
   } catch (err) { console.error(err); alert("投入に失敗しました。Firestoreのルールと管理者UIDを確認してください。"); }
@@ -647,13 +698,15 @@ function renderList() {
     for (const item of items) {
       const sel = item.coord === state.selectedCoord ? "is-selected" : "";
       const bib = item.bibliography.length ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>` : "";
+      const commentCount = state.commentCounts[item.coord] || 0;
+      const commentPill = commentCount > 0 ? `<span class="bib-count-pill" title="コメント ${commentCount}件">💬 ${commentCount}</span>` : "";
       const refsHtml = renderRefChips(item.refs, "前提命題");
       const evalHtml = renderEvalControl(item.coord);
       const ev = getEvaluation(item.coord);
 
       if (state.mode === "split" || (state.mode === "mine" && ev === "hold")) {
         html += `<article class="arg-card is-split ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}</div></div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}${commentPill}</div></div>
           <div class="split-grid">
             <div class="split-col is-plus"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.plusTitle)}</div><div>${escapeHtml(item.plusBody)}</div></div>
             <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${escapeHtml(item.minusBody)}</div></div>
@@ -663,7 +716,7 @@ function renderList() {
         const sign = isPlus ? "+" : "-", oppSign = isPlus ? "-" : "+", oppMode = isPlus ? "minus" : "plus";
         const title = isPlus ? item.plusTitle : item.minusTitle, body = isPlus ? item.plusBody : item.minusBody;
         html += `<article class="arg-card ${isPlus ? "is-plus" : "is-minus"} ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${bib}</div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${bib}${commentPill}</div>
           <button type="button" class="flip-btn js-flip-btn" data-coord="${escapeHtml(item.coord)}" data-target-mode="${oppMode}">⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button></div>
           <p class="card-body">${escapeHtml(body)}</p>${refsHtml}${evalHtml}</article>`;
       }
@@ -997,12 +1050,16 @@ els.profileContent.addEventListener("submit", async (e) => {
     if (!db) return;
     const bodyEl = $("admin-comment-body"), targetEl = $("admin-comment-target"), body = bodyEl.value.trim();
     if (!body) return;
+    const category = $("admin-comment-category").value;
+    const targetRef = targetEl.value.trim();
+    const author = $("admin-comment-author").value.trim() || "匿名";
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = "送信中...";
     try {
       const uid = await ensureSignedInUid();
-      await addDoc(collection(db, "adminComments"), { category: $("admin-comment-category").value, targetRef: targetEl.value.trim(), author: $("admin-comment-author").value.trim() || "匿名", body, authorUid: uid, createdAt: serverTimestamp() });
+      await addDoc(collection(db, "adminComments"), { category, targetRef, author, body, authorUid: uid, createdAt: serverTimestamp() });
       bodyEl.value = ""; targetEl.value = "";
+      notifyAdminByEmail({ category, targetRef, author, body });
       await loadAdminComments();
     } catch (err) {
       console.error(err);
@@ -1253,7 +1310,7 @@ async function init() {
   const { page, topicId, coordToken } = parseUrlHashTokens();
   state.page = page;
   state.currentTopicId = topicId && findTopic(topicId) ? topicId : state.topics[0]?.id || DEFAULT_TOPIC.id;
-  await Promise.all([loadStages(), loadArguments()]);
+  await Promise.all([loadStages(), loadArguments(), loadCommentCounts()]);
   loadEvaluations();
   state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
   state.selectedCoord = state.arguments[0]?.coord || "";
