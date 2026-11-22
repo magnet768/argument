@@ -32,7 +32,7 @@ const state = {
   commentCounts: {},
   topicComments: [], topicCommentsLoading: false, editingTopicCommentId: null,
   memos: {}, editingMemoKey: null,
-  openSections: { coordMemo: false, coordComments: false, topicMemo: false, topicComments: false, adminComments: false },
+  openSections: { coordMemo: false, coordComments: false, topicMemo: false, topicComments: false },
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -188,7 +188,6 @@ function handleSectionToggleClick(e) {
   if (key === "coordMemo" || key === "coordComments") renderComparePanel();
   else if (key === "topicMemo") renderTopicMemoSection();
   else if (key === "topicComments") renderTopicCommentsSection();
-  else if (key === "adminComments") renderProfilePage();
   requestAnimationFrame(syncComparePanelStickyTop);
   return true;
 }
@@ -378,7 +377,7 @@ async function openCoordAndScrollToSection(coord, section) {
       if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   } else {
-    selectCoord(coord, { reloadComments: false });
+    selectCoord(coord, { reloadComments: false, scrollPanelTop: false });
     state.openSections[targetKey] = true;
     renderComparePanel();
     if (changed) await loadCommentsForCoord(coord);
@@ -1332,7 +1331,6 @@ function switchPage(nextPage) {
   state.editingTopicCommentId = null;
   state.editingAdminCommentId = null;
   state.editingMemoKey = null;
-  state.openSections.adminComments = false;
   if (nextPage !== "explorer" && state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; }
   renderAll();
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -1549,6 +1547,7 @@ async function switchTopic(topicId) {
   const first = state.stage !== "all" ? state.arguments.find((a) => a.stage === state.stage) || state.arguments[0] : state.arguments[0];
   state.selectedCoord = first ? first.coord : "";
   renderAll();
+  if (els.comparePanel && !isMobileViewport()) els.comparePanel.scrollTop = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
   await loadCommentsForCoord(state.selectedCoord);
 }
@@ -1637,15 +1636,11 @@ function renderAdminCommentsSection() {
     </div>
     <textarea id="admin-comment-body" rows="4" maxlength="1000" required placeholder="参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などをご記入ください（最大1000文字）"></textarea>
     <button type="submit" class="btn-primary">管理者へコメントを投稿</button>
-    <p class="comment-note">※投稿したコメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
   </form>` : "";
-  const isOpen = Boolean(state.openSections.adminComments);
   return `<section class="doc-section panel-section" id="admin-comments-section">
-    ${renderCollapsibleHeader("adminComments", "💬 管理者へのコメント（修正提案・サイト全体へのご意見）", state.adminComments.length)}
-    <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
-      <p class="admin-comments-lead">各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などがあればこちらからご連絡ください。本文に論題名や座標（例：<code>+1.10</code>）を書くとショートカットが自動で作成されます。</p>
-      ${bodyHtml}${formHtml}
-    </div>
+    <h3 class="panel-section-title"><span>💬 管理者へのコメント（修正提案・サイト全体へのご意見）</span><span class="bib-count-pill">${state.adminComments.length}件</span></h3>
+    <p class="admin-comments-lead">各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などがあればこちらからご連絡ください。投稿したコメントは、同じ端末・ブラウザから本人のみ編集・削除できます。本文に論題名や座標（例：<code>+1.10</code>）を書くとショートカットが自動で作成されます。</p>
+    ${bodyHtml}${formHtml}
   </section>`;
 }
 
@@ -1744,13 +1739,13 @@ function renderTopicCommentsSection() {
     </div>
     <textarea id="topic-comment-body" rows="3" maxlength="1000" required placeholder="この論題全体に対する補足・疑問・感想などを記入（最大1000文字）"></textarea>
     <button type="submit" class="btn-primary">論題へ公開コメントを投稿</button>
-    <p class="comment-note">※本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。投稿した公開コメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
   </form>` : "";
 
   els.topicCommentsSection.innerHTML = `
     <section class="panel-section" style="margin-top: 0; padding-top: 0; border-top: none;">
       ${renderCollapsibleHeader("topicComments", "💬 この論題全体への公開コメント", state.topicComments.length)}
       <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+        <p class="memo-section-lead">投稿した公開コメントは、同じ端末・ブラウザから本人のみ編集・削除できます。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。</p>
         ${bodyHtml}
         ${formHtml}
       </div>
@@ -2074,11 +2069,11 @@ function renderCommentsSection(item) {
     </div>
     <textarea id="comment-body" rows="3" maxlength="1000" required placeholder="この命題に対する補足・反論・疑問などを記入（最大1000文字）"></textarea>
     <button type="submit" class="btn-primary">公開コメントを投稿</button>
-    <p class="comment-note">※本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。投稿した公開コメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
   </form>` : "";
   return `<section class="panel-section" id="detail-comments-section">
     ${renderCollapsibleHeader("coordComments", "💬 公開コメント", state.comments.length)}
     <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+      <p class="memo-section-lead">投稿した公開コメントは、同じ端末・ブラウザから本人のみ編集・削除できます。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。</p>
       ${bodyHtml}
       ${formHtml}
     </div>
@@ -2152,7 +2147,7 @@ function renderAll() {
   requestAnimationFrame(syncComparePanelStickyTop);
 }
 
-function selectCoord(coord, { reloadComments = true } = {}) {
+function selectCoord(coord, { reloadComments = true, scrollPanelTop = true } = {}) {
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
   if (changed) {
@@ -2163,6 +2158,9 @@ function selectCoord(coord, { reloadComments = true } = {}) {
   }
   renderList();
   renderComparePanel();
+  if (scrollPanelTop && els.comparePanel && !isMobileViewport() && !state.detailOpen) {
+    els.comparePanel.scrollTop = 0;
+  }
   syncUrlHash();
   if (reloadComments && changed) loadCommentsForCoord(coord);
 }
@@ -2183,7 +2181,10 @@ function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   }
   renderAll();
   if (state.detailOpen) window.scrollTo({ top: 0, behavior: "smooth" });
-  else focusCard(coord);
+  else {
+    if (els.comparePanel && !isMobileViewport()) els.comparePanel.scrollTop = 0;
+    focusCard(coord);
+  }
   if (changed) loadCommentsForCoord(coord);
 }
 
@@ -2394,7 +2395,6 @@ els.profileForm.addEventListener("submit", async (e) => {
 });
 
 els.profileContent.addEventListener("click", async (e) => {
-  if (handleSectionToggleClick(e)) return;
   if (handleShortcutClick(e)) return;
   const editBtn = e.target.closest(".js-edit-admin-comment");
   if (editBtn) {
@@ -2731,10 +2731,16 @@ els.stageTabs.addEventListener("click", (e) => {
   const cur = findArg(state.selectedCoord);
   if (state.stage !== "all" && (!cur || cur.stage !== state.stage)) {
     const first = state.arguments.find((a) => a.stage === state.stage);
-    if (first) { state.selectedCoord = first.coord; loadCommentsForCoord(first.coord); }
+    if (first) {
+      state.selectedCoord = first.coord;
+      state.openSections.coordMemo = false;
+      state.openSections.coordComments = false;
+      loadCommentsForCoord(first.coord);
+    }
   }
   showSiteHeader();
   renderAll();
+  if (els.comparePanel && !isMobileViewport()) els.comparePanel.scrollTop = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 els.stageBanner.addEventListener("click", (e) => {
