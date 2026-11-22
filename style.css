@@ -2250,7 +2250,7 @@ body.is-detail-view .detail-pager {
 }
 
 body.is-detail-view .compare-panel {
-  animation: detailPanelFadeIn 0.22s ease-out;
+  animation: detailPanelFadeIn 0.36s ease-out;
 }
 
 @media (min-width: 981px) {
@@ -2264,8 +2264,8 @@ body.is-detail-view .compare-panel {
     --compare-panel-width: 390px;
     grid-template-columns: minmax(0, 1fr) var(--compare-panel-width);
     column-gap: 20px;
-    transition: grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                column-gap 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: grid-template-columns 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                column-gap 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   body:not(.is-detail-view) .argument-list {
@@ -2279,11 +2279,11 @@ body.is-detail-view .compare-panel {
     transform: translateX(0);
     visibility: visible;
     pointer-events: auto;
-    transition: opacity 0.24s ease 0.08s,
-                transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                padding-right 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                border-color 0.24s ease 0.08s,
+    transition: opacity 0.38s ease 0.12s,
+                transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-left 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-right 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.38s ease 0.12s,
                 visibility 0s linear 0s;
   }
 
@@ -2310,17 +2310,17 @@ body.is-detail-view .compare-panel {
     overflow: hidden;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.18s ease,
-                transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-                padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                padding-right 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-                border-color 0.18s ease,
-                padding-top 0s linear 0.32s,
-                padding-bottom 0s linear 0.32s,
-                border-width 0s linear 0.32s,
-                height 0s linear 0.32s,
-                max-height 0s linear 0.32s,
-                visibility 0s linear 0.32s;
+    transition: opacity 0.3s ease,
+                transform 0.46s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-left 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-right 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.3s ease,
+                padding-top 0s linear 0.5s,
+                padding-bottom 0s linear 0.5s,
+                border-width 0s linear 0.5s,
+                height 0s linear 0.5s,
+                max-height 0s linear 0.5s,
+                visibility 0s linear 0.5s;
   }
 
   /* 閉じるときに中身が縦長に折り返されてガタつくのを防止 */
