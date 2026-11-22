@@ -32,6 +32,7 @@ const state = {
   commentCounts: {},
   topicComments: [], topicCommentsLoading: false, editingTopicCommentId: null,
   memos: {}, editingMemoKey: null,
+  openSections: { coordMemo: false, coordComments: false, topicMemo: false, topicComments: false, adminComments: false },
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -163,6 +164,34 @@ const findStage = (id) => state.stages.find((s) => s.id === String(id));
 const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; syncComparePanelStickyTop(); };
+
+// === メモ・コメント欄の折りたたみトグル ===
+function renderCollapsibleHeader(sectionKey, titleText, count) {
+  const isOpen = Boolean(state.openSections[sectionKey]);
+  return `<h3 class="panel-section-title is-collapsible">
+    <button type="button" class="section-toggle-btn js-toggle-section" data-section-key="${escapeHtml(sectionKey)}" aria-expanded="${isOpen ? "true" : "false"}">
+      <span>${escapeHtml(titleText)}</span>
+      <span class="section-toggle-right">
+        <span class="bib-count-pill">${count}件</span>
+        <span class="section-toggle-chevron" aria-hidden="true">▾</span>
+      </span>
+    </button>
+  </h3>`;
+}
+
+function handleSectionToggleClick(e) {
+  const btn = e.target.closest(".js-toggle-section");
+  if (!btn) return false;
+  const key = btn.dataset.sectionKey;
+  if (!(key in state.openSections)) return false;
+  state.openSections[key] = !state.openSections[key];
+  if (key === "coordMemo" || key === "coordComments") renderComparePanel();
+  else if (key === "topicMemo") renderTopicMemoSection();
+  else if (key === "topicComments") renderTopicCommentsSection();
+  else if (key === "adminComments") renderProfilePage();
+  requestAnimationFrame(syncComparePanelStickyTop);
+  return true;
+}
 
 // === 共通ショートカット検出・ジャンプ（自分用メモ・公開コメント・管理者へのコメント） ===
 function findTopicMentionsInText(raw) {
@@ -321,7 +350,6 @@ async function openMemoCardTarget(topicId, coord = "") {
     return;
   }
 
-  // 論題メモカードをクリックした場合はその論題の命題一覧へ
   state.page = "explorer";
   state.mode = "plus";
   if (switched) {
@@ -335,12 +363,15 @@ async function openMemoCardTarget(topicId, coord = "") {
 
 async function openCoordAndScrollToSection(coord, section) {
   if (!findArg(coord)) return;
+  const targetKey = section === "memo" ? "coordMemo" : "coordComments";
   const sectionId = section === "memo" ? "detail-memo-section" : "detail-comments-section";
   const changed = state.selectedCoord !== coord;
   const wasDetailOpen = state.detailOpen;
 
   if (isMobileViewport()) {
     openDetailView(coord, { reloadComments: false });
+    state.openSections[targetKey] = true;
+    renderComparePanel();
     if (changed || !wasDetailOpen) await loadCommentsForCoord(coord);
     requestAnimationFrame(() => {
       const target = $(sectionId);
@@ -348,6 +379,8 @@ async function openCoordAndScrollToSection(coord, section) {
     });
   } else {
     selectCoord(coord, { reloadComments: false });
+    state.openSections[targetKey] = true;
+    renderComparePanel();
     if (changed) await loadCommentsForCoord(coord);
     requestAnimationFrame(() => {
       const target = $(sectionId);
@@ -1287,7 +1320,7 @@ const applyDetailBodyClass = () => {
   const open = state.page === "explorer" && state.detailOpen;
   document.body.classList.toggle("is-detail-view", open);
   if (els.topicCommentsSection) els.topicCommentsSection.hidden = open;
-  if (els.topicMemoSection) els.topicMemoSection.hidden = open || state.mode === "memo";
+  if (els.topicMemoSection) els.topicMemoSection.hidden = open;
 };
 
 function switchPage(nextPage) {
@@ -1299,6 +1332,7 @@ function switchPage(nextPage) {
   state.editingTopicCommentId = null;
   state.editingAdminCommentId = null;
   state.editingMemoKey = null;
+  state.openSections.adminComments = false;
   if (nextPage !== "explorer" && state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; }
   renderAll();
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -1314,6 +1348,10 @@ function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false,
   state.selectedCoord = coord;
   state.editingCommentId = null;
   state.editingMemoKey = null;
+  if (changed || !wasOpen) {
+    state.openSections.coordMemo = false;
+    state.openSections.coordComments = false;
+  }
   state.detailOpen = true;
   showSiteHeader({ animate: false });
   applyDetailBodyClass();
@@ -1499,6 +1537,10 @@ async function switchTopic(topicId) {
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
   state.editingMemoKey = null;
+  state.openSections.coordMemo = false;
+  state.openSections.coordComments = false;
+  state.openSections.topicMemo = false;
+  state.openSections.topicComments = false;
   showSiteHeader();
   if (state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
   await Promise.all([loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
@@ -1597,10 +1639,14 @@ function renderAdminCommentsSection() {
     <button type="submit" class="btn-primary">管理者へコメントを投稿</button>
     <p class="comment-note">※投稿したコメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
   </form>` : "";
+  const isOpen = Boolean(state.openSections.adminComments);
   return `<section class="doc-section panel-section" id="admin-comments-section">
-    <h3 class="panel-section-title"><span>💬 管理者へのコメント（修正提案・サイト全体へのご意見）</span><span class="bib-count-pill">${state.adminComments.length}件</span></h3>
-    <p class="admin-comments-lead">各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などがあればこちらからご連絡ください。本文に論題名や座標（例：<code>+1.10</code>）を書くとショートカットが自動で作成されます。</p>
-    ${bodyHtml}${formHtml}</section>`;
+    ${renderCollapsibleHeader("adminComments", "💬 管理者へのコメント（修正提案・サイト全体へのご意見）", state.adminComments.length)}
+    <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+      <p class="admin-comments-lead">各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見などがあればこちらからご連絡ください。本文に論題名や座標（例：<code>+1.10</code>）を書くとショートカットが自動で作成されます。</p>
+      ${bodyHtml}${formHtml}
+    </div>
+  </section>`;
 }
 
 function renderProfilePage() {
@@ -1628,28 +1674,29 @@ function renderTopicMemoSection() {
   if (!els.topicMemoSection) return;
   const topic = getCurrentTopic();
   const memos = getMemosFor(topic.id, TOPIC_COMMENT_COORD);
+  const isOpen = Boolean(state.openSections.topicMemo);
   const listHtml = memos.length === 0
     ? `<p class="empty-muted">この論題への自分用メモはまだありません。</p>`
     : renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, memos);
 
   els.topicMemoSection.innerHTML = `
     <section class="panel-section" style="margin-top: 0; padding-top: 0; border-top: none;">
-      <h3 class="panel-section-title">
-        <span>✎ この論題への自分用メモ（非公開）</span>
-        <span class="bib-count-pill">${memos.length}件</span>
-      </h3>
-      <p class="memo-section-lead">このメモはお使いのブラウザ内のみに保存され、他の閲覧者には見えません。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。</p>
-      ${listHtml}
-      <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topic.id)}" data-coord="${TOPIC_COMMENT_COORD}">
-        <textarea name="body" rows="3" maxlength="2000" required placeholder="論題「${escapeHtml(topic.title)}」に関する自分用の覚え書きを記入（最大2000文字）"></textarea>
-        <button type="submit" class="btn-primary">自分用メモを追加</button>
-      </form>
+      ${renderCollapsibleHeader("topicMemo", "✎ この論題への自分用メモ（非公開）", memos.length)}
+      <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+        <p class="memo-section-lead">このメモはお使いのブラウザ内のみに保存され、他の閲覧者には見えません。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。</p>
+        ${listHtml}
+        <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topic.id)}" data-coord="${TOPIC_COMMENT_COORD}">
+          <textarea name="body" rows="3" maxlength="2000" required placeholder="論題「${escapeHtml(topic.title)}」に関する自分用の覚え書きを記入（最大2000文字）"></textarea>
+          <button type="submit" class="btn-primary">自分用メモを追加</button>
+        </form>
+      </div>
     </section>`;
 }
 
 function renderTopicCommentsSection() {
   if (!els.topicCommentsSection) return;
   const topic = getCurrentTopic();
+  const isOpen = Boolean(state.openSections.topicComments);
   const stanceMap = {
     both: { text: "論題全体", cls: "is-both" },
     plus: { text: `${topic.plusLabel}へ`, cls: "is-plus" },
@@ -1702,12 +1749,11 @@ function renderTopicCommentsSection() {
 
   els.topicCommentsSection.innerHTML = `
     <section class="panel-section" style="margin-top: 0; padding-top: 0; border-top: none;">
-      <h3 class="panel-section-title">
-        <span>💬 この論題全体への公開コメント</span>
-        <span class="bib-count-pill">${state.topicComments.length}件</span>
-      </h3>
-      ${bodyHtml}
-      ${formHtml}
+      ${renderCollapsibleHeader("topicComments", "💬 この論題全体への公開コメント", state.topicComments.length)}
+      <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+        ${bodyHtml}
+        ${formHtml}
+      </div>
     </section>`;
 }
 
@@ -1770,25 +1816,21 @@ function renderMemoModeList() {
   const matchesQuery = (texts) => !q || texts.join(" ").toLowerCase().includes(q);
   let html = "";
 
-  // 1. 現在の論題へのメモ
+  // 1. 現在の論題へのメモ（書き込まれている場合のみ表示）
   const topicMemos = getMemosFor(topic.id, TOPIC_COMMENT_COORD).filter((m) => matchesQuery([topic.title, m.body]));
-  if (!q || topicMemos.length > 0 || topic.title.toLowerCase().includes(q)) {
+  if (topicMemos.length > 0) {
     html += `<div class="topic-group"><h3 class="topic-heading">論題への自分用メモ</h3>
       <article class="memo-card js-memo-card" data-topic-id="${escapeHtml(topic.id)}" data-coord="">
         <div class="memo-target-head">
           <div class="memo-target-kicker"><span class="memo-private-badge">論題メモ</span><span class="bib-count-pill">${topicMemos.length}件</span></div>
           <h4 class="memo-target-title">${escapeHtml(topic.title)}</h4>
         </div>
-        ${topicMemos.length > 0 ? renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, topicMemos) : `<p class="empty-muted" style="margin: 0 0 10px;">この論題への自分用メモはまだありません。</p>`}
-        <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topic.id)}" data-coord="${TOPIC_COMMENT_COORD}" style="margin-top: 10px;">
-          <textarea name="body" rows="2" maxlength="2000" required placeholder="この論題への自分用メモを追加（例：+1.10 との関係を後で確認）"></textarea>
-          <button type="submit" class="btn-primary">論題メモを追加</button>
-        </form>
+        ${renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, topicMemos)}
       </article>
     </div>`;
   }
 
-  // 2. 現在の論題の命題メモ
+  // 2. 現在の論題の命題メモ（書き込まれているもののみ表示）
   const currentBucket = state.memos[topic.id] || {};
   const coordEntries = Object.keys(currentBucket)
     .filter((c) => c !== TOPIC_COMMENT_COORD && Array.isArray(currentBucket[c]) && currentBucket[c].length > 0)
@@ -1826,16 +1868,9 @@ function renderMemoModeList() {
     </article>`);
   }
 
-  html += `<div class="topic-group"><h3 class="topic-heading">この論題の命題メモ${state.stage !== "all" ? `（水準 ${escapeHtml(state.stage)}）` : ""}</h3>`;
   if (visibleCoordCards.length > 0) {
-    html += visibleCoordCards.join("");
-  } else {
-    const emptyMsg = q
-      ? "検索条件に一致する命題メモがありません。"
-      : "この範囲の命題メモはまだありません。各命題の詳細パネル内「自分用メモ」から作成できます。";
-    html += `<div class="empty-state">${emptyMsg}</div>`;
+    html += `<div class="topic-group"><h3 class="topic-heading">この論題の命題メモ${state.stage !== "all" ? `（水準 ${escapeHtml(state.stage)}）` : ""}</h3>${visibleCoordCards.join("")}</div>`;
   }
-  html += `</div>`;
 
   // 3. 他の論題のメモ（存在する場合のみ表示）
   const otherTopicIds = Object.keys(state.memos).filter((tid) => tid !== topic.id);
@@ -1881,6 +1916,13 @@ function renderMemoModeList() {
     html += `<div class="topic-group"><h3 class="topic-heading">他の論題の自分用メモ</h3>${otherCards.join("")}</div>`;
   }
 
+  if (!html) {
+    const emptyMsg = q
+      ? "検索条件に一致する自分用メモがありません。"
+      : "この範囲の自分用メモはまだありません。各命題の詳細パネルやページ下部の「自分用メモ」から作成できます。";
+    html = `<div class="empty-state">${emptyMsg}</div>`;
+  }
+
   els.argList.innerHTML = html;
 }
 
@@ -1918,9 +1960,9 @@ function renderList() {
       const sel = item.coord === state.selectedCoord ? "is-selected" : "";
       const bib = item.bibliography.length ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>` : "";
       const commentCount = state.commentCounts[item.coord] || 0;
-      const commentPill = commentCount > 0 ? `<button type="button" class="bib-count-pill js-jump-section" data-coord="${escapeHtml(item.coord)}" data-section="comments" title="公開コメント ${commentCount}件へ移動">💬 ${commentCount}</button>` : "";
+      const commentPill = commentCount > 0 ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="comments" title="公開コメント ${commentCount}件へ移動"><span class="pill-icon" aria-hidden="true">💬</span><span>${commentCount}</span></span>` : "";
       const memoCount = getMemosFor(state.currentTopicId, item.coord).length;
-      const memoPill = memoCount > 0 ? `<button type="button" class="bib-count-pill js-jump-section" data-coord="${escapeHtml(item.coord)}" data-section="memo" title="自分用メモ ${memoCount}件へ移動">✎ ${memoCount}</button>` : "";
+      const memoPill = memoCount > 0 ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="memo" title="自分用メモ ${memoCount}件へ移動"><span class="pill-icon" aria-hidden="true">✎</span><span>${memoCount}</span></span>` : "";
       const refsHtml = renderRefChips(item.refs, "前提命題");
       const evalHtml = renderEvalControl(item.coord);
       const ev = getEvaluation(item.coord);
@@ -1968,26 +2010,27 @@ function renderBibliographySection(item) {
 function renderCoordMemoSection(item) {
   const topicId = state.currentTopicId;
   const memos = getMemosFor(topicId, item.coord);
+  const isOpen = Boolean(state.openSections.coordMemo);
   const listHtml = memos.length === 0
     ? `<p class="empty-muted">この座標への自分用メモはまだありません。</p>`
     : renderMemoItemsListHtml(topicId, item.coord, memos);
 
   return `<section class="panel-section" id="detail-memo-section">
-    <h3 class="panel-section-title">
-      <span>✎ 自分用メモ（非公開）</span>
-      <span class="bib-count-pill">${memos.length}件</span>
-    </h3>
-    <p class="memo-section-lead">この端末・ブラウザのみに保存されます。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。</p>
-    ${listHtml}
-    <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topicId)}" data-coord="${escapeHtml(item.coord)}">
-      <textarea name="body" rows="3" maxlength="2000" required placeholder="座標 ${escapeHtml(item.coord)} に関する自分用メモを記入（最大2000文字）"></textarea>
-      <button type="submit" class="btn-primary">自分用メモを追加</button>
-    </form>
+    ${renderCollapsibleHeader("coordMemo", "✎ 自分用メモ（非公開）", memos.length)}
+    <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+      <p class="memo-section-lead">この端末・ブラウザのみに保存されます。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。</p>
+      ${listHtml}
+      <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topicId)}" data-coord="${escapeHtml(item.coord)}">
+        <textarea name="body" rows="3" maxlength="2000" required placeholder="座標 ${escapeHtml(item.coord)} に関する自分用メモを記入（最大2000文字）"></textarea>
+        <button type="submit" class="btn-primary">自分用メモを追加</button>
+      </form>
+    </div>
   </section>`;
 }
 
 function renderCommentsSection(item) {
   const topic = getCurrentTopic();
+  const isOpen = Boolean(state.openSections.coordComments);
   const stanceMap = { both: { text: "座標全体", cls: "is-both" }, plus: { text: `+${item.coord} へ`, cls: "is-plus" }, minus: { text: `-${item.coord} へ`, cls: "is-minus" } };
   let bodyHtml = "";
   if (!db) bodyHtml = `<p class="empty-muted">Firebase を設定すると、公開コメント機能が有効になります。</p>`;
@@ -2033,7 +2076,13 @@ function renderCommentsSection(item) {
     <button type="submit" class="btn-primary">公開コメントを投稿</button>
     <p class="comment-note">※本文に座標（例：<code>+1.10</code>）や他の論題名を書くとショートカットが自動で作成されます。投稿した公開コメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</p>
   </form>` : "";
-  return `<section class="panel-section" id="detail-comments-section"><h3 class="panel-section-title"><span>💬 公開コメント</span><span class="bib-count-pill">${state.comments.length}件</span></h3>${bodyHtml}${formHtml}</section>`;
+  return `<section class="panel-section" id="detail-comments-section">
+    ${renderCollapsibleHeader("coordComments", "💬 公開コメント", state.comments.length)}
+    <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+      ${bodyHtml}
+      ${formHtml}
+    </div>
+  </section>`;
 }
 
 function renderComparePanel() {
@@ -2106,7 +2155,12 @@ function renderAll() {
 function selectCoord(coord, { reloadComments = true } = {}) {
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
-  if (changed) { state.editingCommentId = null; state.editingMemoKey = null; }
+  if (changed) {
+    state.editingCommentId = null;
+    state.editingMemoKey = null;
+    state.openSections.coordMemo = false;
+    state.openSections.coordComments = false;
+  }
   renderList();
   renderComparePanel();
   syncUrlHash();
@@ -2121,7 +2175,12 @@ function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   if (closeDetail && state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
-  if (changed) { state.editingCommentId = null; state.editingMemoKey = null; }
+  if (changed) {
+    state.editingCommentId = null;
+    state.editingMemoKey = null;
+    state.openSections.coordMemo = false;
+    state.openSections.coordComments = false;
+  }
   renderAll();
   if (state.detailOpen) window.scrollTo({ top: 0, behavior: "smooth" });
   else focusCard(coord);
@@ -2335,6 +2394,7 @@ els.profileForm.addEventListener("submit", async (e) => {
 });
 
 els.profileContent.addEventListener("click", async (e) => {
+  if (handleSectionToggleClick(e)) return;
   if (handleShortcutClick(e)) return;
   const editBtn = e.target.closest(".js-edit-admin-comment");
   if (editBtn) {
@@ -2405,11 +2465,15 @@ els.profileContent.addEventListener("submit", async (e) => {
 });
 
 // === 論題メモセクションイベント ===
-els.topicMemoSection?.addEventListener("click", (e) => { handleMemoClick(e); });
+els.topicMemoSection?.addEventListener("click", (e) => {
+  if (handleSectionToggleClick(e)) return;
+  handleMemoClick(e);
+});
 els.topicMemoSection?.addEventListener("submit", (e) => { handleMemoSubmit(e); });
 
 // === 論題全体への公開コメントイベント ===
 els.topicCommentsSection.addEventListener("click", async (e) => {
+  if (handleSectionToggleClick(e)) return;
   if (handleShortcutClick(e)) return;
   const editBtn = e.target.closest(".js-edit-topic-comment");
   if (editBtn) {
@@ -2713,9 +2777,20 @@ els.argList.addEventListener("click", (e) => {
   if (card) { if (isMobileViewport()) openDetailView(card.dataset.coord); else selectCoord(card.dataset.coord); }
 });
 
+els.argList.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const sectionBtn = e.target.closest(".js-jump-section");
+  if (sectionBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    openCoordAndScrollToSection(sectionBtn.dataset.coord, sectionBtn.dataset.section);
+  }
+});
+
 els.argList.addEventListener("submit", (e) => { handleMemoSubmit(e); });
 
 els.comparePanel.addEventListener("click", async (e) => {
+  if (handleSectionToggleClick(e)) return;
   if (handleMemoClick(e)) return;
   const evalBtn = e.target.closest(".js-eval-btn");
   if (evalBtn) { setEvaluation(evalBtn.dataset.coord, evalBtn.dataset.eval); return; }
