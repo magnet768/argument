@@ -32,8 +32,9 @@ const state = {
   stages: [], stagesInDb: false, rawArguments: [], arguments: [],
   commentCounts: {},
   topicComments: [], topicCommentsLoading: false, editingTopicCommentId: null,
-  memos: {}, editingMemoKey: null,
+  memos: {}, editingMemoKey: null, openMemoCards: {},
   openSections: { coordMemo: false, coordComments: false, topicMemo: false, topicComments: false },
+  pcPanelOpen: true,
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -420,8 +421,19 @@ function getMemosFor(topicId, coord = TOPIC_COMMENT_COORD) {
   return bucket[coord];
 }
 
+function makeMemoCardKey(topicId, coord) {
+  return `${topicId}::${coord}`;
+}
+
 function makeMemoEditKey(topicId, coord, memoId) {
   return `${topicId}::${coord}::${memoId}`;
+}
+
+function isMemoCardOpen(topicId, coord, { hasQuery = false } = {}) {
+  if (hasQuery) return true;
+  const cardKey = makeMemoCardKey(topicId, coord);
+  if (state.editingMemoKey && state.editingMemoKey.startsWith(`${cardKey}::`)) return true;
+  return Boolean(state.openMemoCards[cardKey]);
 }
 
 function buildMemoMetaSnapshot(topicId, coord) {
@@ -535,7 +547,7 @@ function syncComparePanelStickyTop() {
   const panel = els.comparePanel;
   if (!panel) return;
   const layoutEl = panel.parentElement;
-  if (isMobileViewport() || state.page !== "explorer" || state.detailOpen || !layoutEl || layoutEl.offsetParent === null) {
+  if (isMobileViewport() || state.page !== "explorer" || state.detailOpen || !state.pcPanelOpen || !layoutEl || layoutEl.offsetParent === null) {
     return;
   }
   const layoutRect = layoutEl.getBoundingClientRect();
@@ -566,7 +578,10 @@ function syncComparePanelStickyTop() {
 }
 
 function initPcStickyComparePanel() {
-  const scheduleSync = () => requestAnimationFrame(syncComparePanelStickyTop);
+  const scheduleSync = () => {
+    applyDetailBodyClass();
+    requestAnimationFrame(syncComparePanelStickyTop);
+  };
   window.addEventListener("resize", scheduleSync);
   window.addEventListener("load", scheduleSync);
   if (typeof ResizeObserver !== "undefined") {
@@ -1322,7 +1337,9 @@ function closeNavDrawer() {
 }
 const applyDetailBodyClass = () => {
   const open = state.page === "explorer" && state.detailOpen;
+  const pcHidden = !isMobileViewport() && state.page === "explorer" && !state.detailOpen && !state.pcPanelOpen;
   document.body.classList.toggle("is-detail-view", open);
+  document.body.classList.toggle("is-pc-panel-hidden", pcHidden);
   if (els.topicCommentsSection) els.topicCommentsSection.hidden = open;
   if (els.topicMemoSection) els.topicMemoSection.hidden = open;
 };
@@ -1349,6 +1366,7 @@ function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false,
   const changed = state.selectedCoord !== coord;
   state.page = "explorer";
   state.selectedCoord = coord;
+  state.pcPanelOpen = true;
   state.editingCommentId = null;
   state.editingMemoKey = null;
   if (changed || !wasOpen) {
@@ -1810,22 +1828,38 @@ function renderRefChips(refs, label) {
   return `<div class="ref-row"><span>${escapeHtml(label)}:</span>${refs.map((c) => `<button type="button" class="ref-chip js-ref-btn" data-ref="${escapeHtml(c)}">±${escapeHtml(c)}</button>`).join("")}</div>`;
 }
 
+function renderMemoCardToggleHtml(topicId, coord, count, isOpen) {
+  const cardKey = makeMemoCardKey(topicId, coord);
+  return `<button type="button" class="bib-count-pill memo-card-toggle-btn js-toggle-memo-card" data-memo-card-key="${escapeHtml(cardKey)}" aria-expanded="${isOpen ? "true" : "false"}" title="${isOpen ? "メモをたたむ" : "メモを開く"}">
+    <span>✎ ${count}件</span>
+    <span class="section-toggle-chevron" aria-hidden="true">▾</span>
+  </button>`;
+}
+
 function renderMemoModeList() {
   const topic = getCurrentTopic();
   const q = state.query.trim().toLowerCase();
+  const hasQuery = Boolean(q);
   const matchesQuery = (texts) => !q || texts.join(" ").toLowerCase().includes(q);
+  const showSelected = isMobileViewport() || state.pcPanelOpen;
   let html = "";
 
   // 1. 現在の論題へのメモ（書き込まれている場合のみ表示）
   const topicMemos = getMemosFor(topic.id, TOPIC_COMMENT_COORD).filter((m) => matchesQuery([topic.title, m.body]));
   if (topicMemos.length > 0) {
+    const isOpen = isMemoCardOpen(topic.id, TOPIC_COMMENT_COORD, { hasQuery });
     html += `<div class="topic-group"><h3 class="topic-heading">論題への自分用メモ</h3>
       <article class="memo-card js-memo-card" data-topic-id="${escapeHtml(topic.id)}" data-coord="">
-        <div class="memo-target-head">
-          <div class="memo-target-kicker"><span class="memo-private-badge">論題メモ</span><span class="bib-count-pill">${topicMemos.length}件</span></div>
+        <div class="memo-target-head ${isOpen ? "" : "is-collapsed"}">
+          <div class="memo-target-kicker">
+            <span class="memo-private-badge">論題メモ</span>
+            ${renderMemoCardToggleHtml(topic.id, TOPIC_COMMENT_COORD, topicMemos.length, isOpen)}
+          </div>
           <h4 class="memo-target-title">${escapeHtml(topic.title)}</h4>
         </div>
-        ${renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, topicMemos)}
+        <div class="memo-card-body" ${isOpen ? "" : "hidden"}>
+          ${renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, topicMemos)}
+        </div>
       </article>
     </div>`;
   }
@@ -1849,22 +1883,25 @@ function renderMemoModeList() {
     const filteredMemos = memos.filter((m) => matchesQuery([coord, `+${coord}`, `-${coord}`, argTopic, plusTitle, minusTitle, m.body]));
     if (filteredMemos.length === 0) continue;
 
-    const sel = coord === state.selectedCoord ? "is-selected" : "";
+    const sel = showSelected && coord === state.selectedCoord ? "is-selected" : "";
+    const isOpen = isMemoCardOpen(topic.id, coord, { hasQuery });
     const propHeadingsHtml = (plusTitle || minusTitle) ? `<div class="memo-prop-headings">
       ${plusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-plus">+${escapeHtml(coord)}</span><span>${escapeHtml(plusTitle)}</span></div>` : ""}
       ${minusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-minus">-${escapeHtml(coord)}</span><span>${escapeHtml(minusTitle)}</span></div>` : ""}
     </div>` : "";
 
     visibleCoordCards.push(`<article class="memo-card js-memo-card ${sel}" data-topic-id="${escapeHtml(topic.id)}" data-coord="${escapeHtml(coord)}">
-      <div class="memo-target-head">
+      <div class="memo-target-head ${isOpen ? "" : "is-collapsed"}">
         <div class="memo-target-kicker">
           <span class="coord-badge is-neutral">座標 ${escapeHtml(coord)}</span>
-          <span class="bib-count-pill">✎ ${filteredMemos.length}件</span>
+          ${renderMemoCardToggleHtml(topic.id, coord, filteredMemos.length, isOpen)}
         </div>
         <h4 class="memo-target-title">${escapeHtml(argTopic || `座標 ${coord}`)}</h4>
         ${propHeadingsHtml}
       </div>
-      ${renderMemoItemsListHtml(topic.id, coord, filteredMemos)}
+      <div class="memo-card-body" ${isOpen ? "" : "hidden"}>
+        ${renderMemoItemsListHtml(topic.id, coord, filteredMemos)}
+      </div>
     </article>`);
   }
 
@@ -1892,6 +1929,7 @@ function renderMemoModeList() {
       const filteredMemos = memos.filter((m) => matchesQuery([tTitle, tid, isTopicMemo ? "" : k, argTopic, plusTitle, minusTitle, m.body]));
       if (filteredMemos.length === 0) continue;
 
+      const isOpen = isMemoCardOpen(tid, k, { hasQuery });
       const headingText = isTopicMemo ? tTitle : `${tTitle} / ${argTopic || `座標 ${k}`}`;
       const propHeadingsHtml = (!isTopicMemo && (plusTitle || minusTitle)) ? `<div class="memo-prop-headings">
         ${plusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-plus">+${escapeHtml(k)}</span><span>${escapeHtml(plusTitle)}</span></div>` : ""}
@@ -1899,15 +1937,17 @@ function renderMemoModeList() {
       </div>` : "";
 
       otherCards.push(`<article class="memo-card js-memo-card" data-topic-id="${escapeHtml(tid)}" data-coord="${isTopicMemo ? "" : escapeHtml(k)}">
-        <div class="memo-target-head">
+        <div class="memo-target-head ${isOpen ? "" : "is-collapsed"}">
           <div class="memo-target-kicker">
             <span class="memo-private-badge">${isTopicMemo ? "他論題メモ" : `他論題・座標 ${escapeHtml(k)}`}</span>
-            <span class="bib-count-pill">✎ ${filteredMemos.length}件</span>
+            ${renderMemoCardToggleHtml(tid, k, filteredMemos.length, isOpen)}
           </div>
           <h4 class="memo-target-title">${escapeHtml(headingText)}</h4>
           ${propHeadingsHtml}
         </div>
-        ${renderMemoItemsListHtml(tid, k, filteredMemos)}
+        <div class="memo-card-body" ${isOpen ? "" : "hidden"}>
+          ${renderMemoItemsListHtml(tid, k, filteredMemos)}
+        </div>
       </article>`);
     }
   }
@@ -1953,11 +1993,12 @@ function renderList() {
     groups.get(key).push(item);
   }
 
+  const showSelected = isMobileViewport() || state.pcPanelOpen;
   let html = "";
   for (const [heading, items] of groups.entries()) {
     html += `<div class="topic-group"><h3 class="topic-heading">${escapeHtml(heading)}</h3>`;
     for (const item of items) {
-      const sel = item.coord === state.selectedCoord ? "is-selected" : "";
+      const sel = showSelected && item.coord === state.selectedCoord ? "is-selected" : "";
       const bib = item.bibliography.length ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="bib" title="参考文献 ${item.bibliography.length}件へ移動"><span class="pill-icon" aria-hidden="true">${BIB_ICON}</span><span>${item.bibliography.length}</span></span>` : "";
       const commentCount = state.commentCounts[item.coord] || 0;
       const commentPill = commentCount > 0 ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="comments" title="公開コメント ${commentCount}件へ移動"><span class="pill-icon" aria-hidden="true">💬</span><span>${commentCount}</span></span>` : "";
@@ -2154,18 +2195,22 @@ function renderAll() {
 
 function selectCoord(coord, { reloadComments = true, scrollPanelTop = true } = {}) {
   const changed = state.selectedCoord !== coord;
+  const wasClosed = !state.pcPanelOpen;
   state.selectedCoord = coord;
+  state.pcPanelOpen = true;
   if (changed) {
     state.editingCommentId = null;
     state.editingMemoKey = null;
     state.openSections.coordMemo = false;
     state.openSections.coordComments = false;
   }
+  applyDetailBodyClass();
   renderList();
   renderComparePanel();
   if (scrollPanelTop && els.comparePanel && !isMobileViewport() && !state.detailOpen) {
     els.comparePanel.scrollTop = 0;
   }
+  if (wasClosed) requestAnimationFrame(syncComparePanelStickyTop);
   syncUrlHash();
   if (reloadComments && changed) loadCommentsForCoord(coord);
 }
@@ -2178,6 +2223,7 @@ function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   if (closeDetail && state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
+  state.pcPanelOpen = true;
   if (changed) {
     state.editingCommentId = null;
     state.editingMemoKey = null;
@@ -2362,7 +2408,30 @@ els.drawerNavButtons.forEach((b) => b.addEventListener("click", () => switchPage
 document.addEventListener("click", (e) => {
   if (e.target.closest(".js-go-explorer")) { switchPage("explorer"); return; }
   if (e.target.closest(".js-go-profile")) { switchPage("profile"); return; }
-  if (e.target.closest(".js-open-profile-edit")) openProfileDialog();
+  if (e.target.closest(".js-open-profile-edit")) { openProfileDialog(); return; }
+
+  // PC版：背景クリックで右側詳細パネルを非表示にし、命題一覧を全幅表示にする
+  if (
+    !isMobileViewport() &&
+    state.page === "explorer" &&
+    !state.detailOpen &&
+    state.pcPanelOpen &&
+    !state.drawerOpen &&
+    !document.querySelector("dialog[open]") &&
+    e.target instanceof Element &&
+    e.target.isConnected
+  ) {
+    const selText = window.getSelection ? window.getSelection().toString().trim() : "";
+    if (selText) return;
+    const hitInteractive = e.target.closest(
+      ".arg-card, .memo-card, .compare-panel, .site-header, .nav-drawer, .nav-backdrop, .doc-card, .stage-banner, .status-notice, .empty-state, dialog, button, a, input, textarea, select, label"
+    );
+    if (!hitInteractive) {
+      state.pcPanelOpen = false;
+      applyDetailBodyClass();
+      renderList();
+    }
+  }
 });
 document.querySelectorAll(".js-close-dialog").forEach((b) => b.addEventListener("click", () => b.closest("dialog")?.close()));
 els.topicSelect.addEventListener("change", (e) => switchTopic(e.target.value));
@@ -2766,6 +2835,15 @@ els.searchInput.addEventListener("input", (e) => {
 });
 
 els.argList.addEventListener("click", (e) => {
+  const memoToggle = e.target.closest(".js-toggle-memo-card");
+  if (memoToggle) {
+    e.stopPropagation();
+    const key = memoToggle.dataset.memoCardKey;
+    state.openMemoCards[key] = !state.openMemoCards[key];
+    renderList();
+    requestAnimationFrame(syncComparePanelStickyTop);
+    return;
+  }
   if (handleMemoClick(e)) return;
   const sectionBtn = e.target.closest(".js-jump-section");
   if (sectionBtn) {

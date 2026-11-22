@@ -2026,7 +2026,7 @@ body.is-detail-view .detail-pager {
   }
 }
 
-/* 一覧カードのコメント・メモ件数バッジ（元の見た目のまま大きさを統一） */
+/* 一覧カードの文献・コメント・メモ件数バッジ（元の見た目のまま大きさを統一） */
 .bib-count-pill.js-count-pill {
   display: inline-flex;
   align-items: center;
@@ -2083,7 +2083,8 @@ body.is-detail-view .detail-pager {
   transition: transform 0.18s ease;
 }
 
-.section-toggle-btn[aria-expanded="true"] .section-toggle-chevron {
+.section-toggle-btn[aria-expanded="true"] .section-toggle-chevron,
+.memo-card-toggle-btn[aria-expanded="true"] .section-toggle-chevron {
   transform: rotate(180deg);
 }
 
@@ -2167,13 +2168,33 @@ body.is-detail-view .detail-pager {
   border-bottom: 1px solid #e2e8f0;
 }
 
+.memo-target-head.is-collapsed {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
 .memo-target-kicker {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 0.8rem;
   color: #64748b;
+}
+
+.memo-card-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.memo-card-toggle-btn:hover {
+  filter: brightness(0.95);
 }
 
 .memo-target-title {
@@ -2221,5 +2242,19 @@ body.is-detail-view .detail-pager {
   body:not(.is-detail-view) .argument-list > .topic-group:last-child > .memo-card:last-child,
   body:not(.is-detail-view) .argument-list > .memo-card:last-child {
     margin-bottom: 0;
+  }
+
+  /* PC版で背景クリックにより右側詳細パネルを非表示にしたときの全幅表示 */
+  body.is-pc-panel-hidden:not(.is-detail-view) .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.is-pc-panel-hidden:not(.is-detail-view) .argument-list {
+    width: 100%;
+    max-width: none;
+  }
+
+  body.is-pc-panel-hidden:not(.is-detail-view) .compare-panel {
+    display: none;
   }
 }
