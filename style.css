@@ -1958,3 +1958,13 @@ body.is-detail-view .detail-pager {
     pointer-events: none;
   }
 }
+
+@media (min-width: 981px) {
+  body:not(.is-detail-view) .compare-panel {
+    position: sticky;
+    top: var(--compare-sticky-top, 180px);
+    align-self: start;
+    max-height: max(260px, calc(100vh - var(--compare-sticky-top, 180px) - 20px));
+    overflow-y: auto;
+  }
+}
