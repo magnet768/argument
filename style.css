@@ -1960,11 +1960,31 @@ body.is-detail-view .detail-pager {
 }
 
 @media (min-width: 981px) {
+  body:not(.is-detail-view) .argument-list {
+    align-self: start;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  body:not(.is-detail-view) .argument-list > .topic-group:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  body:not(.is-detail-view) .argument-list > .topic-group:last-child > .arg-card:last-child,
+  body:not(.is-detail-view) .argument-list > .arg-card:last-child {
+    margin-bottom: 0;
+  }
+
   body:not(.is-detail-view) .compare-panel {
     position: sticky;
     top: var(--compare-sticky-top, 180px);
     align-self: start;
-    max-height: max(260px, calc(100vh - var(--compare-sticky-top, 180px) - 20px));
+    box-sizing: border-box;
+    margin-top: 0;
+    margin-bottom: 0;
+    height: var(--compare-panel-height, max(220px, calc(100vh - var(--compare-sticky-top, 180px) - 20px)));
+    max-height: var(--compare-panel-height, max(220px, calc(100vh - var(--compare-sticky-top, 180px) - 20px)));
     overflow-y: auto;
   }
 }

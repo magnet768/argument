@@ -161,7 +161,10 @@ const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; syncComparePanelStickyTop(); };
 
-// === PC版：右側詳細パネルの初期位置を sticky の top に完全一致させて固定 ===
+// === PC版：右側詳細パネルの初期位置と高さを一覧と揃えて固定 ===
+let lastStickyTopStr = "";
+let lastPanelHeightStr = "";
+
 function syncComparePanelStickyTop() {
   const panel = els.comparePanel;
   if (!panel) return;
@@ -169,9 +172,30 @@ function syncComparePanelStickyTop() {
   if (isMobileViewport() || state.page !== "explorer" || state.detailOpen || !layoutEl || layoutEl.offsetParent === null) {
     return;
   }
-  const exactTop = Math.max(0, layoutEl.getBoundingClientRect().top + window.scrollY);
+  const layoutRect = layoutEl.getBoundingClientRect();
+  const exactTop = Math.max(0, layoutRect.top + window.scrollY);
   if (exactTop > 0) {
-    document.documentElement.style.setProperty("--compare-sticky-top", `${exactTop.toFixed(2)}px`);
+    const topStr = `${exactTop.toFixed(2)}px`;
+    if (topStr !== lastStickyTopStr) {
+      document.documentElement.style.setProperty("--compare-sticky-top", topStr);
+      lastStickyTopStr = topStr;
+    }
+  }
+
+  const viewportAvailable = Math.max(220, window.innerHeight - exactTop - 20);
+  const cards = els.argList ? els.argList.querySelectorAll(".arg-card") : [];
+  const lastCard = cards.length > 0 ? cards[cards.length - 1] : null;
+  let panelHeight = viewportAvailable;
+  if (lastCard) {
+    const listBottomHeight = Math.max(0, lastCard.getBoundingClientRect().bottom - layoutRect.top);
+    if (listBottomHeight > 0) {
+      panelHeight = Math.min(viewportAvailable, listBottomHeight);
+    }
+  }
+  const heightStr = `${panelHeight.toFixed(2)}px`;
+  if (heightStr !== lastPanelHeightStr) {
+    document.documentElement.style.setProperty("--compare-panel-height", heightStr);
+    lastPanelHeightStr = heightStr;
   }
 }
 
@@ -181,7 +205,7 @@ function initPcStickyComparePanel() {
   window.addEventListener("load", scheduleSync);
   if (typeof ResizeObserver !== "undefined") {
     const ro = new ResizeObserver(scheduleSync);
-    [els.siteHeader, els.stageBanner, els.statusNotice].forEach((el) => { if (el) ro.observe(el); });
+    [els.siteHeader, els.stageBanner, els.statusNotice, els.argList].forEach((el) => { if (el) ro.observe(el); });
   }
   scheduleSync();
 }
@@ -923,6 +947,7 @@ function setEvaluation(coord, value) {
   saveEvaluations();
   renderList();
   renderComparePanel();
+  requestAnimationFrame(syncComparePanelStickyTop);
 }
 function renderEvalControl(coord, { isPanel = false } = {}) {
   const topic = getCurrentTopic();
@@ -2168,7 +2193,11 @@ els.modeButtons.forEach((b) => b.addEventListener("click", () => {
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }));
-els.searchInput.addEventListener("input", (e) => { state.query = e.target.value; renderList(); });
+els.searchInput.addEventListener("input", (e) => {
+  state.query = e.target.value;
+  renderList();
+  requestAnimationFrame(syncComparePanelStickyTop);
+});
 
 els.argList.addEventListener("click", (e) => {
   const evalBtn = e.target.closest(".js-eval-btn");
