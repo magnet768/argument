@@ -159,7 +159,32 @@ function rebuildArgumentsWithBasicProps() {
 const findStage = (id) => state.stages.find((s) => s.id === String(id));
 const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
-const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; };
+const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; syncComparePanelStickyTop(); };
+
+// === PC版：右側詳細パネルの初期位置を sticky の top に完全一致させて固定 ===
+function syncComparePanelStickyTop() {
+  const panel = els.comparePanel;
+  if (!panel) return;
+  const layoutEl = panel.parentElement;
+  if (isMobileViewport() || state.page !== "explorer" || state.detailOpen || !layoutEl || layoutEl.offsetParent === null) {
+    return;
+  }
+  const exactTop = Math.max(0, layoutEl.getBoundingClientRect().top + window.scrollY);
+  if (exactTop > 0) {
+    document.documentElement.style.setProperty("--compare-sticky-top", `${exactTop.toFixed(2)}px`);
+  }
+}
+
+function initPcStickyComparePanel() {
+  const scheduleSync = () => requestAnimationFrame(syncComparePanelStickyTop);
+  window.addEventListener("resize", scheduleSync);
+  window.addEventListener("load", scheduleSync);
+  if (typeof ResizeObserver !== "undefined") {
+    const ro = new ResizeObserver(scheduleSync);
+    [els.siteHeader, els.stageBanner, els.statusNotice].forEach((el) => { if (el) ro.observe(el); });
+  }
+  scheduleSync();
+}
 
 // === スマホ用スクロール連動ヘッダー（指の動きに合わせて滑らかに出入り） ===
 let resetMobileHeader = () => {};
@@ -1641,6 +1666,7 @@ function renderAll() {
   renderTopicCommentsSection();
   renderProfilePage();
   syncUrlHash();
+  requestAnimationFrame(syncComparePanelStickyTop);
 }
 
 function selectCoord(coord, { reloadComments = true } = {}) {
@@ -2245,12 +2271,14 @@ els.comparePanel.addEventListener("submit", async (e) => {
 });
 
 async function init() {
+  initPcStickyComparePanel();
   initMobileSmartHeader();
   if (auth) {
     onAuthStateChanged(auth, (user) => {
       state.currentUid = user ? user.uid : null;
       state.isAdmin = Boolean(user && user.uid === ADMIN_UID);
       renderAdminBar(); renderStageBanner(); renderList(); renderComparePanel(); renderTopicCommentsSection(); renderProfilePage();
+      requestAnimationFrame(syncComparePanelStickyTop);
     });
   }
   await Promise.all([loadProfile(), loadTopics(), loadAdminComments()]);
