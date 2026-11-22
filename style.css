@@ -2238,15 +2238,59 @@ body.is-detail-view .detail-pager {
   color: #b91c1c;
 }
 
+@keyframes detailPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+body.is-detail-view .compare-panel {
+  animation: detailPanelFadeIn 0.22s ease-out;
+}
+
 @media (min-width: 981px) {
   body:not(.is-detail-view) .argument-list > .topic-group:last-child > .memo-card:last-child,
   body:not(.is-detail-view) .argument-list > .memo-card:last-child {
     margin-bottom: 0;
   }
 
-  /* PC版で背景クリックにより右側詳細パネルを非表示にしたときの全幅表示 */
+  /* PC版：右側詳細パネルを滑らかに開閉するレイアウト設定 */
+  body:not(.is-detail-view) .layout {
+    --compare-panel-width: 390px;
+    grid-template-columns: minmax(0, 1fr) var(--compare-panel-width);
+    column-gap: 20px;
+    transition: grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                column-gap 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  body:not(.is-detail-view) .argument-list {
+    min-width: 0;
+  }
+
+  body:not(.is-detail-view) .compare-panel {
+    min-width: 0;
+    overflow-x: hidden;
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.24s ease 0.08s,
+                transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-right 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.24s ease 0.08s,
+                visibility 0s linear 0s;
+  }
+
+  /* PC版で背景クリックにより右側詳細パネルを非表示にした状態 */
   body.is-pc-panel-hidden:not(.is-detail-view) .layout {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 0px;
+    column-gap: 0px;
   }
 
   body.is-pc-panel-hidden:not(.is-detail-view) .argument-list {
@@ -2255,6 +2299,38 @@ body.is-detail-view .detail-pager {
   }
 
   body.is-pc-panel-hidden:not(.is-detail-view) .compare-panel {
-    display: none;
+    opacity: 0;
+    transform: translateX(18px);
+    padding: 0;
+    border-color: transparent;
+    border-width: 0;
+    height: 0;
+    max-height: 0;
+    min-height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease,
+                transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                padding-right 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.18s ease,
+                padding-top 0s linear 0.32s,
+                padding-bottom 0s linear 0.32s,
+                border-width 0s linear 0.32s,
+                height 0s linear 0.32s,
+                max-height 0s linear 0.32s,
+                visibility 0s linear 0.32s;
+  }
+
+  /* 閉じるときに中身が縦長に折り返されてガタつくのを防止 */
+  body.is-pc-panel-hidden:not(.is-detail-view) .compare-panel > .detail-body {
+    min-width: 340px;
+  }
+}
+
+@media (min-width: 1180px) {
+  body:not(.is-detail-view) .layout {
+    --compare-panel-width: 440px;
   }
 }
