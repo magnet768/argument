@@ -462,7 +462,6 @@ function getFilteredArguments() {
   const q = state.query.trim().toLowerCase();
   return state.arguments.filter((item) => {
     if (state.stage !== "all" && item.stage !== state.stage) return false;
-    if (state.mode === "mine" && getEvaluation(item.coord) === "hold") return false;
     if (!q) return true;
     const bib = item.bibliography.map((b) => `${b.citation} ${b.note}`).join(" ");
     return [item.coord, `+${item.coord}`, `-${item.coord}`, item.topic, item.plusTitle, item.plusBody, item.minusTitle, item.minusBody, bib].join(" ").toLowerCase().includes(q);
@@ -626,10 +625,7 @@ function renderList() {
   if (filtered.length === 0) {
     let hint = "条件に一致する命題がありません。";
     if (!state.query) {
-      if (state.mode === "mine") {
-        const t = getCurrentTopic();
-        hint = `まだ自説が選択されていません。各命題の評価で「+（${escapeHtml(t.plusLabel)}）」または「-（${escapeHtml(t.minusLabel)}）」を選ぶと、ここに一覧表示されます。`;
-      } else if (state.stages.length === 0) {
+      if (state.stages.length === 0) {
         hint = state.isAdmin ? "この論題にはまだ水準がありません。上部の「+ 水準を追加」から最初の水準（例：1）を作成してください。" : "この論題にはまだ命題が登録されていません。";
       } else {
         hint = state.isAdmin ? "この水準にはまだ命題がありません。上部の「+ 新規命題を追加」から追加できます。" : "この水準にはまだ命題が登録されていません。";
@@ -654,8 +650,9 @@ function renderList() {
       const bib = item.bibliography.length ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>` : "";
       const refsHtml = renderRefChips(item.refs, "前提命題");
       const evalHtml = renderEvalControl(item.coord);
+      const ev = getEvaluation(item.coord);
 
-      if (state.mode === "split") {
+      if (state.mode === "split" || (state.mode === "mine" && ev === "hold")) {
         html += `<article class="arg-card is-split ${sel}" data-coord="${escapeHtml(item.coord)}">
           <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}</div></div>
           <div class="split-grid">
@@ -663,7 +660,7 @@ function renderList() {
             <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${escapeHtml(item.minusBody)}</div></div>
           </div>${refsHtml}${evalHtml}</article>`;
       } else {
-        const isPlus = state.mode === "mine" ? getEvaluation(item.coord) === "plus" : state.mode === "plus";
+        const isPlus = state.mode === "mine" ? ev === "plus" : state.mode === "plus";
         const sign = isPlus ? "+" : "-", oppSign = isPlus ? "-" : "+", oppMode = isPlus ? "minus" : "plus";
         const title = isPlus ? item.plusTitle : item.minusTitle, body = isPlus ? item.plusBody : item.minusBody;
         html += `<article class="arg-card ${isPlus ? "is-plus" : "is-minus"} ${sel}" data-coord="${escapeHtml(item.coord)}">
