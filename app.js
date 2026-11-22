@@ -9,6 +9,7 @@ const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
 const TOPIC_COMMENT_COORD = "__topic__";
 const LEGACY_TOPIC_ID = "antinatalism";
 const MEMO_STORAGE_KEY = "arg_explorer_private_memos_v1";
+const BIB_ICON = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg>`;
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
@@ -362,15 +363,17 @@ async function openMemoCardTarget(topicId, coord = "") {
 
 async function openCoordAndScrollToSection(coord, section) {
   if (!findArg(coord)) return;
-  const targetKey = section === "memo" ? "coordMemo" : "coordComments";
-  const sectionId = section === "memo" ? "detail-memo-section" : "detail-comments-section";
+  const targetKey = section === "memo" ? "coordMemo" : section === "comments" ? "coordComments" : null;
+  const sectionId = section === "bib" ? "detail-bib-section" : section === "memo" ? "detail-memo-section" : "detail-comments-section";
   const changed = state.selectedCoord !== coord;
   const wasDetailOpen = state.detailOpen;
 
   if (isMobileViewport()) {
     openDetailView(coord, { reloadComments: false });
-    state.openSections[targetKey] = true;
-    renderComparePanel();
+    if (targetKey) {
+      state.openSections[targetKey] = true;
+      renderComparePanel();
+    }
     if (changed || !wasDetailOpen) await loadCommentsForCoord(coord);
     requestAnimationFrame(() => {
       const target = $(sectionId);
@@ -378,8 +381,10 @@ async function openCoordAndScrollToSection(coord, section) {
     });
   } else {
     selectCoord(coord, { reloadComments: false, scrollPanelTop: false });
-    state.openSections[targetKey] = true;
-    renderComparePanel();
+    if (targetKey) {
+      state.openSections[targetKey] = true;
+      renderComparePanel();
+    }
     if (changed) await loadCommentsForCoord(coord);
     requestAnimationFrame(() => {
       const target = $(sectionId);
@@ -1953,7 +1958,7 @@ function renderList() {
     html += `<div class="topic-group"><h3 class="topic-heading">${escapeHtml(heading)}</h3>`;
     for (const item of items) {
       const sel = item.coord === state.selectedCoord ? "is-selected" : "";
-      const bib = item.bibliography.length ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>` : "";
+      const bib = item.bibliography.length ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="bib" title="参考文献 ${item.bibliography.length}件へ移動"><span class="pill-icon" aria-hidden="true">${BIB_ICON}</span><span>${item.bibliography.length}</span></span>` : "";
       const commentCount = state.commentCounts[item.coord] || 0;
       const commentPill = commentCount > 0 ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="comments" title="公開コメント ${commentCount}件へ移動"><span class="pill-icon" aria-hidden="true">💬</span><span>${commentCount}</span></span>` : "";
       const memoCount = getMemosFor(state.currentTopicId, item.coord).length;
@@ -1999,7 +2004,7 @@ function renderBibliographySection(item) {
     <input type="url" id="bib-url" placeholder="参照URL（任意・https://...）" />
     <input type="text" id="bib-note" placeholder="関連箇所・メモ（任意）" />
     <button type="submit" class="btn-primary">参考文献を追加</button></form>` : "";
-  return `<section class="panel-section" id="detail-bib-section"><h3 class="panel-section-title"><span>参考文献</span><span class="bib-count-pill">${item.bibliography.length}件</span></h3>${listHtml}${formHtml}</section>`;
+  return `<section class="panel-section" id="detail-bib-section"><h3 class="panel-section-title"><span>${BIB_ICON} 参考文献</span><span class="bib-count-pill">${item.bibliography.length}件</span></h3>${listHtml}${formHtml}</section>`;
 }
 
 function renderCoordMemoSection(item) {
