@@ -7,10 +7,11 @@ import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 // 例: "https://formspree.io/f/xxxxxxxx" （空欄の場合は通知をスキップします）
 const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
 const TOPIC_COMMENT_COORD = "__topic__";
+const LEGACY_TOPIC_ID = "antinatalism";
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
-const DEFAULT_TOPIC = { id: "antinatalism", title: "反出生主義と反論：細分化論証エクスプローラー", plusLabel: "肯定側", minusLabel: "反論側", order: 1, useLegacyRoot: true };
+const DEFAULT_TOPIC = { id: "relativism", title: "相対主義と絶対主義：細分化論証エクスプローラー", plusLabel: "相対主義", minusLabel: "絶対主義", order: 1, useLegacyRoot: false };
 const DEFAULT_PROFILE = { name: "", role: "" };
 
 const isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("ここに");
@@ -94,7 +95,7 @@ const normalizeTopic = (raw) => {
     plusLabel: String(raw.plusLabel ?? "肯定側").trim() || "肯定側",
     minusLabel: String(raw.minusLabel ?? "反論側").trim() || "反論側",
     order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : 9999,
-    useLegacyRoot: typeof raw.useLegacyRoot === "boolean" ? raw.useLegacyRoot : id === DEFAULT_TOPIC.id
+    useLegacyRoot: typeof raw.useLegacyRoot === "boolean" ? raw.useLegacyRoot : id === LEGACY_TOPIC_ID
   };
 };
 
@@ -110,7 +111,7 @@ const normalizeArg = (raw) => ({
 
 const findTopic = (id) => state.topics.find((t) => t.id === id);
 const getCurrentTopic = () => findTopic(state.currentTopicId) || state.topics[0] || DEFAULT_TOPIC;
-const isLegacyTopic = (topicId = state.currentTopicId) => Boolean(findTopic(topicId) ? findTopic(topicId).useLegacyRoot : topicId === DEFAULT_TOPIC.id);
+const isLegacyTopic = (topicId = state.currentTopicId) => Boolean(findTopic(topicId) ? findTopic(topicId).useLegacyRoot : topicId === LEGACY_TOPIC_ID);
 const stagesCollection = (tid = state.currentTopicId) => isLegacyTopic(tid) ? collection(db, "stages") : collection(db, "topics", tid, "stages");
 const stageDoc = (sid, tid = state.currentTopicId) => isLegacyTopic(tid) ? doc(db, "stages", sid) : doc(db, "topics", tid, "stages", sid);
 const argumentsCollection = (tid = state.currentTopicId) => isLegacyTopic(tid) ? collection(db, "arguments") : collection(db, "topics", tid, "arguments");
@@ -552,7 +553,7 @@ async function handleBackupRestore() {
     await ensureTopicsSeededInDb();
     for (const b of bundles) {
       const existing = findTopic(b.topic.id);
-      const useLegacyRoot = existing ? Boolean(existing.useLegacyRoot) : (b.topic.id === DEFAULT_TOPIC.id);
+      const useLegacyRoot = existing ? Boolean(existing.useLegacyRoot) : (b.topic.id === LEGACY_TOPIC_ID);
       const topicPayload = {
         id: b.topic.id,
         title: b.topic.title,
@@ -733,7 +734,7 @@ async function notifyAdminByEmail({ category, targetRef, author, body }) {
   }
 }
 
-// === 命題の評価（localStorage 保存・前提→帰結の一方向連動） ===
+// === 主張の評価（localStorage 保存・前提→帰結の一方向連動） ===
 const evalStorageKey = (tid = state.currentTopicId) => `arg_explorer_evals_${tid}`;
 function loadEvaluations() {
   try {
@@ -779,7 +780,7 @@ function renderEvalControl(coord, { isPanel = false } = {}) {
   return `
     <div class="eval-row ${isPanel ? "is-panel" : ""}">
       <span class="eval-label">自説：${escapeHtml(curLabel)}</span>
-      <div class="eval-group" role="group" aria-label="命題の評価">
+      <div class="eval-group" role="group" aria-label="主張の評価">
         <button type="button" class="eval-btn js-eval-btn ${cur === "plus" ? "is-active" : ""}" data-coord="${escapeHtml(coord)}" data-eval="plus" title="${escapeHtml(topic.plusLabel)}" aria-label="${escapeHtml(topic.plusLabel)}">+</button>
         <button type="button" class="eval-btn js-eval-btn ${cur === "hold" ? "is-active" : ""}" data-coord="${escapeHtml(coord)}" data-eval="hold" title="保留" aria-label="保留">=</button>
         <button type="button" class="eval-btn js-eval-btn ${cur === "minus" ? "is-active" : ""}" data-coord="${escapeHtml(coord)}" data-eval="minus" title="${escapeHtml(topic.minusLabel)}" aria-label="${escapeHtml(topic.minusLabel)}">-</button>
@@ -1996,12 +1997,17 @@ els.stageTabs.addEventListener("click", (e) => {
     if (first) { state.selectedCoord = first.coord; loadCommentsForCoord(first.coord); }
   }
   renderAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 });
 els.stageBanner.addEventListener("click", (e) => {
   const b = e.target.closest(".js-edit-stage");
   if (b) openStageDialog(b.dataset.stageId);
 });
-els.modeButtons.forEach((b) => b.addEventListener("click", () => { state.mode = b.dataset.mode; renderAll(); }));
+els.modeButtons.forEach((b) => b.addEventListener("click", () => {
+  state.mode = b.dataset.mode;
+  renderAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}));
 els.searchInput.addEventListener("input", (e) => { state.query = e.target.value; renderList(); });
 
 els.argList.addEventListener("click", (e) => {
