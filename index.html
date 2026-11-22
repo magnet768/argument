@@ -81,11 +81,11 @@
 
     <main class="layout">
       <section id="argument-list" class="argument-list" aria-label="命題一覧"></section>
-      <aside id="compare-panel" class="compare-panel" aria-label="1対1比較・参考文献・メモ・コメント"></aside>
+      <aside id="compare-panel" class="compare-panel" aria-label="1対1比較・参考文献・自分用メモ・公開コメント"></aside>
     </main>
 
     <section id="topic-memo-section" class="doc-card" style="margin-top: 24px;" aria-label="この論題への自分用メモ"></section>
-    <section id="topic-comments-section" class="doc-card" style="margin-top: 24px;" aria-label="この論題全体へのコメント"></section>
+    <section id="topic-comments-section" class="doc-card" style="margin-top: 24px;" aria-label="この論題全体への公開コメント"></section>
   </div>
 
   <div id="guide-view" class="container page-container" hidden>
@@ -124,7 +124,7 @@
           </div>
           <div class="guide-box">
             <h4>5つの表示モードを使い分ける</h4>
-            <p><strong>+ / -</strong> では一方の立場に属する命題だけを通読できます。<strong>⇄ 比較</strong>では対立する命題を左右に並べて俯瞰でき、<strong>☆ 自説</strong>では自分が採用した極性の命題だけを一覧表示できます。<strong>✎ メモ</strong>では論題・命題ごとに書き留めた自分用メモを見出し付きで一覧表示し、対象や言及先の論題・命題へ移動できます。</p>
+            <p><strong>+ / -</strong> では一方の立場に属する命題だけを通読できます。<strong>⇄ 比較</strong>では対立する命題を左右に並べて俯瞰でき、<strong>☆ 自説</strong>では自分が採用した極性の命題だけを一覧表示できます。<strong>✎ メモ</strong>では論題・命題ごとに書き留めた自分用メモを一覧表示し、対象の論題や命題へ直接移動できます。</p>
           </div>
           <div class="guide-box">
             <h4>極性（符号）の反転と主張の評価</h4>
@@ -140,18 +140,18 @@
       <section class="doc-section">
         <h3>3. PCとスマートフォンでの見方</h3>
         <ul class="doc-list">
-          <li><strong>PCで閲覧する場合</strong>：左側に命題一覧、右側に選択中の座標の「1対1比較・参考文献・自分用メモ・閲覧者コメント」が表示されます。各命題カードをクリックすると右側のパネルが切り替わります。右側上部の<strong>「⤢ 拡大」</strong>を押すと、その座標だけの集中画面に切り替えられます。</li>
-          <li><strong>スマートフォンで閲覧する場合</strong>：一覧画面で任意の命題カードをタップすると、その座標の<strong>専用詳細ページ</strong>へ移動します。詳細ページ右上の<strong>「💬 コメント」</strong>からコメント欄へすぐ移動でき、<strong>「← 一覧」</strong>（または端末の戻る操作）で元のスクロール位置へ戻れます。</li>
+          <li><strong>PCで閲覧する場合</strong>：左側に命題一覧、右側に選択中の座標の「1対1比較・参考文献・自分用メモ・公開コメント」が表示されます。各命題カードをクリックすると右側のパネルが切り替わります。右側上部の<strong>「⤢ 拡大」</strong>を押すと、その座標だけの集中画面に切り替えられます。</li>
+          <li><strong>スマートフォンで閲覧する場合</strong>：一覧画面で任意の命題カードをタップすると、その座標の<strong>専用詳細ページ</strong>へ移動します。</li>
         </ul>
       </section>
 
       <section class="doc-section">
-        <h3>4. 参考文献・自分用メモ・コメント投稿・URL共有</h3>
+        <h3>4. 参考文献・自分用メモ・公開コメント・URL共有</h3>
         <ul class="doc-list">
           <li><strong>参考文献の確認</strong>：各座標の詳細パネル下部に、その命題に関連する書籍・論文・参照URLが整理されています。この項目は管理者のみ編集・削除できるようになっています。</li>
-          <li><strong>自分用メモ（非公開）</strong>：公開コメントとは別に、自分だけが見られるメモを<strong>論題ごと</strong>および<strong>命題ごと</strong>に作成・編集・削除できます（お使いのブラウザ内にのみ保存され、他の閲覧者には公開されません）。メモ本文中に座標（例：<code>+1.10</code> や <code>2.10</code>）や他の論題名を書くと見出し付きのリンクが自動生成され、<strong>✎ メモ</strong>モードやメモ欄から対象・言及先の論題や命題へ直接移動できます。</li>
-          <li><strong>論題・命題へのコメント投稿</strong>：命題一覧ページ最下部から<strong>論題全体</strong>へ、また各座標の詳細ページから<strong>個別の命題</strong>（座標全体・<code>+</code>側・<code>-</code>側）へ補足・反論・疑問を投稿できます（最大1000文字、空欄で匿名）。投稿したコメントは、同じ端末・ブラウザから本人のみ編集・削除できます。</li>
-          <li><strong>管理者へのコメント投稿</strong>：各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見がある場合は、左上メニューの<strong>「管理者ページ」</strong>下部にある「管理者へのコメント」欄から、該当する論題・座標を指定して投稿できます（こちらも投稿した本人のみ編集・削除が可能です）。</li>
+          <li><strong>自分用メモ（非公開）</strong>：公開コメントとは別に、自分だけが見られるメモを<strong>論題ごと</strong>および<strong>命題ごと</strong>に作成・編集・削除できます（お使いのブラウザ内にのみ保存され、他の閲覧者には公開されません）。メモ本文中に座標（例：<code>+1.10</code>）や他の論題名を書くと自動的にショートカットが作成され、<strong>✎ メモ</strong>モードやメモ欄から言及先の論題や命題へ直接移動できます。</li>
+          <li><strong>公開コメントの投稿</strong>：命題一覧ページ最下部から<strong>論題全体</strong>へ、また各座標の詳細ページから<strong>個別の命題</strong>（座標全体・<code>+</code>側・<code>-</code>側）へ補足・反論・疑問を投稿できます（最大1000文字、空欄で匿名）。本文に座標や論題名を書くとショートカットが自動で作成され、投稿した公開コメントは同じ端末・ブラウザから本人のみ編集・削除できます。</li>
+          <li><strong>管理者へのコメント投稿</strong>：各座標の参考文献の修正提案、命題・論証の修正提案、またはサイト全体へのご意見がある場合は、左上メニューの<strong>「管理者ページ」</strong>下部にある「管理者へのコメント」欄から投稿できます。こちらも本文に論題名や座標を書くとショートカットが自動で作成され、投稿した本人のみ編集・削除が可能です。</li>
           <li><strong>特定座標のURL共有</strong>：命題を選択するとブラウザのURL末尾に <code>#論題ID/+1.10</code> のような座標が自動付与されます。そのURLを共有すると、相手がその命題を直接開いた状態でアクセスできます。</li>
         </ul>
       </section>

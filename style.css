@@ -1989,7 +1989,7 @@ body.is-detail-view .detail-pager {
   }
 }
 
-/* === ✎ メモ表示モード（ターコイズ）＆自分用メモUI === */
+/* === ✎ メモ表示モード（ターコイズ）＆自分用メモ・ショートカット・5モード1行均等配置 === */
 .mode-btn[data-mode="memo"].is-active,
 .mode-btn[data-mode="memo"].is-active:hover {
   background: #00ced1;
@@ -1997,17 +1997,43 @@ body.is-detail-view .detail-pager {
   color: #0f172a;
 }
 
-.memo-count-pill {
+.mode-group {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.mode-group .mode-btn {
+  width: 100%;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 600;
-  background: #ccfbf1;
-  border: 1px solid #5eead4;
-  color: #0f766e;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .mode-group {
+    width: 100%;
+    gap: 4px;
+  }
+
+  .mode-group .mode-btn {
+    padding: 7px 2px;
+    font-size: clamp(0.64rem, 2.7vw, 0.78rem);
+    letter-spacing: -0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+button.bib-count-pill.js-jump-section {
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+button.bib-count-pill.js-jump-section:hover {
+  filter: brightness(0.95);
 }
 
 .memo-private-badge {
@@ -2041,7 +2067,7 @@ body.is-detail-view .detail-pager {
   color: #1e293b;
 }
 
-.memo-mentions-row {
+.shortcut-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -2049,29 +2075,6 @@ body.is-detail-view .detail-pager {
   margin-top: 8px;
   font-size: 0.8rem;
   color: #475569;
-}
-
-.memo-jump-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid #5eead4;
-  background: #f0fdfa;
-  color: #0f766e;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-  line-height: 1.35;
-}
-
-.memo-jump-chip:hover {
-  background: #ccfbf1;
-  border-color: #00ced1;
-  color: #083344;
 }
 
 .memo-card {
@@ -2082,6 +2085,11 @@ body.is-detail-view .detail-pager {
   padding: 14px 16px;
   margin-bottom: 14px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  cursor: pointer;
+}
+
+.memo-card:hover {
+  border-color: #94a3b8;
 }
 
 .memo-card.is-selected {
@@ -2091,21 +2099,11 @@ body.is-detail-view .detail-pager {
 
 .memo-target-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   padding-bottom: 10px;
   margin-bottom: 10px;
   border-bottom: 1px solid #e2e8f0;
-}
-
-.memo-target-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  flex: 1 1 220px;
 }
 
 .memo-target-kicker {
@@ -2117,21 +2115,12 @@ body.is-detail-view .detail-pager {
   color: #64748b;
 }
 
-.memo-target-title-btn {
-  padding: 0;
-  border: none;
-  background: transparent;
+.memo-target-title {
+  margin: 0;
   color: #0f172a;
   font-size: 1rem;
   font-weight: 700;
-  text-align: left;
-  cursor: pointer;
   line-height: 1.45;
-}
-
-.memo-target-title-btn:hover {
-  color: #0e7490;
-  text-decoration: underline;
 }
 
 .memo-prop-headings {
@@ -2167,27 +2156,7 @@ body.is-detail-view .detail-pager {
   color: #b91c1c;
 }
 
-.memo-target-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
 @media (min-width: 981px) {
-  .mode-group {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-  }
-
-  .mode-group .mode-btn {
-    width: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-  }
-
   body:not(.is-detail-view) .argument-list > .topic-group:last-child > .memo-card:last-child,
   body:not(.is-detail-view) .argument-list > .memo-card:last-child {
     margin-bottom: 0;
