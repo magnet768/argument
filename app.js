@@ -4,8 +4,8 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, dele
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 
 // ★管理者へのコメント投稿時にメール通知を送るための Formspree エンドポイントURL
-// 例: "https://formspree.io/f/xdegwegn" （空欄の場合は通知をスキップします）
-const ADMIN_NOTIFY_ENDPOINT = "";
+// 例: "https://formspree.io/f/xxxxxxxx" （空欄の場合は通知をスキップします）
+const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
 const TOPIC_COMMENT_COORD = "__topic__";
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
@@ -67,6 +67,11 @@ const isMobileViewport = () => window.matchMedia("(max-width: 980px)").matches;
 const escapeHtml = (str) => String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const safeUrl = (url) => (/^https?:\/\//i.test(String(url ?? "").trim()) ? String(url).trim() : "");
 const compareNatural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+const normalizeCoordInput = (str) => String(str ?? "").trim()
+  .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+  .replace(/[．。]/g, ".")
+  .replace(/＋/g, "+")
+  .replace(/[－ー―]/g, "-");
 const formatBasicProp = (text) => String(text ?? "").replace(/^(\s*\([+-]\d+)(\))/, "$1.00$2").replace(/^(\s*[+-]\d+)(?=\s|$)/, "$1.00");
 const stripBasicCoordPrefix = (text) => {
   const s = String(text ?? "").trim();
@@ -153,7 +158,7 @@ const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.t
 
 // === 管理者コメントの対象解決・ジャンプ ===
 function buildAdminTargetRef(topicId, coord) {
-  const cleanCoord = String(coord ?? "").trim();
+  const cleanCoord = normalizeCoordInput(coord);
   const topicTitle = topicId ? (findTopic(topicId)?.title || topicId) : "";
   if (!topicTitle) return cleanCoord.slice(0, 80);
   if (!cleanCoord) return topicTitle.slice(0, 80);
@@ -164,7 +169,7 @@ function buildAdminTargetRef(topicId, coord) {
 
 function resolveAdminCommentTarget(c) {
   let topicId = String(c.targetTopicId ?? "").trim();
-  let coord = String(c.targetCoord ?? "").trim();
+  let coord = normalizeCoordInput(c.targetCoord);
   const refText = String(c.targetRef ?? "").trim();
 
   if (refText) {
@@ -177,7 +182,7 @@ function resolveAdminCommentTarget(c) {
       if (matched) topicId = matched.id;
     }
     if (!coord) {
-      const coordCandidate = parts.length > 1 ? parts[parts.length - 1] : refText;
+      const coordCandidate = normalizeCoordInput(parts.length > 1 ? parts[parts.length - 1] : refText);
       const m = coordCandidate.match(/[+-]?\d+\.\d+[a-zA-Z]?/);
       if (m) coord = m[0];
     }
@@ -195,27 +200,30 @@ function resolveAdminCommentTarget(c) {
 
 async function jumpToAdminCommentTarget(topicId, coordToken) {
   const targetTopicId = topicId && findTopic(topicId) ? topicId : state.currentTopicId;
-  state.page = "explorer";
   if (targetTopicId !== state.currentTopicId) {
+    state.page = "explorer";
     await switchTopic(targetTopicId);
   }
   if (coordToken) {
     let targetMode = null;
-    let coord = coordToken.trim();
+    let coord = normalizeCoordInput(coordToken).replace(/^±/, "");
     if (coord.startsWith("+")) { targetMode = "plus"; coord = coord.slice(1); }
     else if (coord.startsWith("-")) { targetMode = "minus"; coord = coord.slice(1); }
     const found = findArg(coord);
     if (found) {
+      if (state.query) { state.query = ""; els.searchInput.value = ""; }
       if (isMobileViewport()) {
         state.stage = found.stage;
         if (targetMode) state.mode = targetMode;
-        openDetailView(found.coord);
+        openDetailView(found.coord, { resetScroll: true });
       } else {
+        state.page = "explorer";
         jumpTo(found.coord, targetMode);
       }
       return;
     }
   }
+  state.page = "explorer";
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -386,20 +394,26 @@ function switchPage(nextPage) {
   window.scrollTo({ top: 0, behavior: "instant" });
   if (nextPage === "profile") loadAdminComments();
 }
-function openDetailView(coord, { pushBrowserHistory = true } = {}) {
+function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false } = {}) {
   if (!findArg(coord)) return;
   const wasOpen = state.detailOpen;
-  if (!wasOpen) state.savedListScrollY = window.scrollY;
+  const wasExplorer = state.page === "explorer";
+  if (!wasOpen) state.savedListScrollY = (!wasExplorer || resetScroll) ? 0 : window.scrollY;
   const changed = state.selectedCoord !== coord;
   state.page = "explorer";
   state.selectedCoord = coord;
   state.editingCommentId = null;
   state.detailOpen = true;
   applyDetailBodyClass();
+  renderPageVisibility();
   if (pushBrowserHistory && !wasOpen) {
     try { history.pushState({ detailOpen: true, coord }, "", getCurrentHash()); state.pushedDetailHistory = true; }
     catch { state.pushedDetailHistory = false; }
   } else syncUrlHash();
+  renderTopicBar();
+  renderTabs();
+  renderModeButtons();
+  renderStageBanner();
   renderList();
   renderComparePanel();
   window.scrollTo({ top: 0, behavior: "instant" });
