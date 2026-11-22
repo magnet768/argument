@@ -34,7 +34,7 @@ const state = {
   topicComments: [], topicCommentsLoading: false, editingTopicCommentId: null,
   memos: {}, editingMemoKey: null, openMemoCards: {},
   openSections: { coordMemo: false, coordComments: false, topicMemo: false, topicComments: false },
-  pcPanelOpen: true,
+  pcPanelOpen: false,
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -326,6 +326,7 @@ async function jumpToShortcutTarget(topicId, coord = "", targetMode = "") {
   state.page = "explorer";
   if (state.mode === "memo") state.mode = "plus";
   if (state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
+  state.pcPanelOpen = false;
   showSiteHeader();
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -353,6 +354,7 @@ async function openMemoCardTarget(topicId, coord = "") {
 
   state.page = "explorer";
   state.mode = "plus";
+  state.pcPanelOpen = false;
   if (switched) {
     await switchTopic(tid);
     return;
@@ -388,6 +390,7 @@ async function openCoordAndScrollToSection(coord, section) {
     }
     if (changed) await loadCommentsForCoord(coord);
     requestAnimationFrame(() => {
+      syncComparePanelStickyTop();
       const target = $(sectionId);
       if (!target) return;
       if (state.detailOpen) {
@@ -1152,11 +1155,12 @@ async function handleBackupRestore() {
       state.stage = state.stages[0]?.id || "all";
     }
     if (!findArg(state.selectedCoord)) {
-      state.selectedCoord = state.arguments[0]?.coord || "";
+      state.selectedCoord = "";
+      state.pcPanelOpen = false;
     }
     els.backupDialog.close();
     renderAll();
-    await loadCommentsForCoord(state.selectedCoord);
+    if (state.selectedCoord) await loadCommentsForCoord(state.selectedCoord);
     alert(`復元が完了しました（論題 ${bundles.length}件・水準 ${stageCount}件・命題 ${argCount}件）。`);
   } catch (err) {
     console.error(err);
@@ -1275,7 +1279,8 @@ function getCurrentHash() {
   if (state.page === "guide") return "#guide";
   if (state.page === "profile") return "#profile";
   if (!state.currentTopicId) return "";
-  if (!state.selectedCoord) return `#${encodeURIComponent(state.currentTopicId)}`;
+  const isShowingDetail = state.detailOpen || (!isMobileViewport() && state.pcPanelOpen);
+  if (!isShowingDetail || !state.selectedCoord) return `#${encodeURIComponent(state.currentTopicId)}`;
   const p = state.mode === "plus" ? "+" : state.mode === "minus" ? "-" : "";
   return `#${encodeURIComponent(state.currentTopicId)}/${p}${state.selectedCoord}`;
 }
@@ -1306,6 +1311,42 @@ function applyCoordToken(coordToken) {
   state.mode = mode;
   state.selectedCoord = found.coord;
   return true;
+}
+async function applyUrlHashState() {
+  const { page, topicId, coordToken } = parseUrlHashTokens();
+  if (page !== "explorer") {
+    state.page = page;
+    state.detailOpen = false;
+    state.pushedDetailHistory = false;
+    renderAll();
+    if (page === "profile") await loadAdminComments();
+    return;
+  }
+
+  state.page = "explorer";
+  if (topicId && findTopic(topicId) && topicId !== state.currentTopicId) {
+    await switchTopic(topicId, { scrollTop: false });
+  }
+
+  if (coordToken && applyCoordToken(coordToken)) {
+    if (isMobileViewport()) {
+      openDetailView(state.selectedCoord, { pushBrowserHistory: false });
+    } else {
+      state.detailOpen = false;
+      state.pcPanelOpen = true;
+      state.openSections.coordMemo = false;
+      state.openSections.coordComments = false;
+      renderAll();
+      if (els.comparePanel) els.comparePanel.scrollTop = 0;
+      focusCard(state.selectedCoord);
+      await loadCommentsForCoord(state.selectedCoord);
+    }
+  } else {
+    state.detailOpen = false;
+    state.pushedDetailHistory = false;
+    state.pcPanelOpen = false;
+    renderAll();
+  }
 }
 function focusCard(coord) {
   if (state.detailOpen || state.page !== "explorer") return;
@@ -1547,7 +1588,7 @@ async function loadCommentsForCoord(coord) {
   } catch (err) { console.error(err); state.comments = []; }
   finally { state.commentsLoading = false; renderList(); renderComparePanel(); }
 }
-async function switchTopic(topicId) {
+async function switchTopic(topicId, { scrollTop = true } = {}) {
   if (!findTopic(topicId)) return;
   state.currentTopicId = topicId;
   state.query = "";
@@ -1558,6 +1599,8 @@ async function switchTopic(topicId) {
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
   state.editingMemoKey = null;
+  state.pcPanelOpen = false;
+  state.selectedCoord = "";
   state.openSections.coordMemo = false;
   state.openSections.coordComments = false;
   state.openSections.topicMemo = false;
@@ -1567,12 +1610,9 @@ async function switchTopic(topicId) {
   await Promise.all([loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
   loadEvaluations();
   state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
-  const first = state.stage !== "all" ? state.arguments.find((a) => a.stage === state.stage) || state.arguments[0] : state.arguments[0];
-  state.selectedCoord = first ? first.coord : "";
   renderAll();
   if (els.comparePanel && !isMobileViewport()) els.comparePanel.scrollTop = 0;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  await loadCommentsForCoord(state.selectedCoord);
+  if (scrollTop) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // === 描画関数 ===
@@ -2404,6 +2444,11 @@ els.menuCloseBtn.addEventListener("click", closeNavDrawer);
 els.navBackdrop.addEventListener("click", closeNavDrawer);
 window.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.drawerOpen) closeNavDrawer(); });
 window.addEventListener("popstate", () => { if (state.detailOpen) closeDetailView({ restoreScroll: true }); });
+window.addEventListener("hashchange", () => {
+  const current = decodeURIComponent(window.location.hash || "");
+  if (current === decodeURIComponent(getCurrentHash())) return;
+  applyUrlHashState();
+});
 els.drawerNavButtons.forEach((b) => b.addEventListener("click", () => switchPage(b.dataset.page)));
 document.addEventListener("click", (e) => {
   if (e.target.closest(".js-go-explorer")) { switchPage("explorer"); return; }
@@ -2430,6 +2475,7 @@ document.addEventListener("click", (e) => {
       state.pcPanelOpen = false;
       applyDetailBodyClass();
       renderList();
+      syncUrlHash();
     }
   }
 });
@@ -2742,14 +2788,12 @@ els.stageDeleteBtn.addEventListener("click", async () => {
     await Promise.all([loadStages(), loadArguments(), loadCommentCounts()]);
     if (state.stage === targetId) state.stage = state.stages[0]?.id || "all";
     if (!findArg(state.selectedCoord)) {
-      const nextFirst = state.stage !== "all"
-        ? (state.arguments.find((a) => a.stage === state.stage) || state.arguments[0])
-        : state.arguments[0];
-      state.selectedCoord = nextFirst ? nextFirst.coord : "";
+      state.selectedCoord = "";
+      state.pcPanelOpen = false;
       if (state.detailOpen) closeDetailView({ restoreScroll: false });
     }
     renderAll();
-    await loadCommentsForCoord(state.selectedCoord);
+    if (state.selectedCoord) await loadCommentsForCoord(state.selectedCoord);
   } catch (err) {
     console.error(err);
     els.stageError.textContent = "削除に失敗しました。";
@@ -2779,7 +2823,7 @@ els.argForm.addEventListener("submit", async (e) => {
     await setDoc(argumentDoc(coord), payload);
     els.argDialog.close();
     await loadArguments();
-    state.stage = payload.stage; state.selectedCoord = coord;
+    state.stage = payload.stage; state.selectedCoord = coord; state.pcPanelOpen = true;
     renderAll(); loadCommentsForCoord(coord); focusCard(coord);
   } catch (err) { console.error(err); els.argError.textContent = "保存に失敗しました。"; els.argError.hidden = false; }
 });
@@ -2792,9 +2836,9 @@ els.argDeleteBtn.addEventListener("click", async () => {
     await deleteDoc(argumentDoc(target));
     els.argDialog.close();
     await loadArguments();
-    state.selectedCoord = state.arguments[0]?.coord || "";
+    state.selectedCoord = "";
+    state.pcPanelOpen = false;
     if (state.detailOpen) closeDetailView({ restoreScroll: false }); else renderAll();
-    loadCommentsForCoord(state.selectedCoord);
   } catch (err) { console.error(err); els.argError.textContent = "削除に失敗しました。"; els.argError.hidden = false; }
 });
 
@@ -2802,14 +2846,16 @@ els.stageTabs.addEventListener("click", (e) => {
   const btn = e.target.closest(".tab-btn");
   if (!btn) return;
   state.stage = btn.dataset.stage;
-  const cur = findArg(state.selectedCoord);
-  if (state.stage !== "all" && (!cur || cur.stage !== state.stage)) {
-    const first = state.arguments.find((a) => a.stage === state.stage);
-    if (first) {
-      state.selectedCoord = first.coord;
-      state.openSections.coordMemo = false;
-      state.openSections.coordComments = false;
-      loadCommentsForCoord(first.coord);
+  if (state.pcPanelOpen || state.detailOpen) {
+    const cur = findArg(state.selectedCoord);
+    if (state.stage !== "all" && (!cur || cur.stage !== state.stage)) {
+      const first = state.arguments.find((a) => a.stage === state.stage);
+      if (first) {
+        state.selectedCoord = first.coord;
+        state.openSections.coordMemo = false;
+        state.openSections.coordComments = false;
+        loadCommentsForCoord(first.coord);
+      }
     }
   }
   showSiteHeader();
@@ -2971,6 +3017,7 @@ els.comparePanel.addEventListener("submit", async (e) => {
 
 async function init() {
   loadMemos();
+  applyDetailBodyClass();
   initPcStickyComparePanel();
   initMobileSmartHeader();
   if (auth) {
@@ -2988,10 +3035,16 @@ async function init() {
   await Promise.all([loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
   loadEvaluations();
   state.stage = state.stages.length > 0 ? state.stages[0].id : "all";
-  state.selectedCoord = state.arguments[0]?.coord || "";
-  if (state.page === "explorer" && applyCoordToken(coordToken) && isMobileViewport()) state.detailOpen = true;
+  state.selectedCoord = "";
+  const hasCoordInUrl = state.page === "explorer" && applyCoordToken(coordToken);
+  if (hasCoordInUrl) {
+    if (isMobileViewport()) state.detailOpen = true;
+    else state.pcPanelOpen = true;
+  } else {
+    state.pcPanelOpen = false;
+  }
   renderAll();
-  await loadCommentsForCoord(state.selectedCoord);
+  if (state.selectedCoord) await loadCommentsForCoord(state.selectedCoord);
 }
 
 init();
