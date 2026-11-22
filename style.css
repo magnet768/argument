@@ -1988,3 +1988,18 @@ body.is-detail-view .detail-pager {
     overflow-y: auto;
   }
 }
+
+@media (min-width: 981px) {
+  .mode-group {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .mode-group .mode-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
