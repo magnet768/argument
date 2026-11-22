@@ -1934,3 +1934,10 @@ body.is-detail-view .detail-pager {
     mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 28px), transparent 100%);
   }
 }
+
+.mode-btn[data-mode="mine"].is-active,
+.mode-btn[data-mode="mine"].is-active:hover {
+  background: #facc15;
+  border-color: #eab308;
+  color: #1e293b;
+}
