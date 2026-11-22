@@ -1844,18 +1844,46 @@ els.topicForm.addEventListener("submit", async (e) => {
 els.topicDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingTopicId) return;
   const targetId = state.editingTopicId;
-  if (state.topics.length <= 1) { els.topicError.textContent = "最後の1件の論題は削除できません。"; els.topicError.hidden = false; return; }
-  const savedArgsCount = state.rawArguments.length;
-  if (savedArgsCount > 0) { els.topicError.textContent = `この論題には ${savedArgsCount} 件の命題が残っています。先に削除してください。`; els.topicError.hidden = false; return; }
-  if (!confirm(`論題「${findTopic(targetId)?.title || targetId}」を削除しますか？`)) return;
+  els.topicError.hidden = true;
+  if (state.topics.length <= 1) {
+    els.topicError.textContent = "最後の1件の論題は削除できません。";
+    els.topicError.hidden = false;
+    return;
+  }
+  const origLabel = els.topicDeleteBtn.textContent;
+  els.topicDeleteBtn.disabled = true;
+  els.topicDeleteBtn.textContent = "確認中...";
   try {
+    const [stSnap, argSnap, comSnap] = await Promise.all([
+      getDocs(stagesCollection(targetId)),
+      getDocs(argumentsCollection(targetId)),
+      getDocs(commentsCollection(targetId))
+    ]);
+    const title = findTopic(targetId)?.title || targetId;
+    const detail = `水準 ${stSnap.size}件・命題 ${argSnap.size}件・コメント ${comSnap.size}件`;
+    if (!confirm(`論題「${title}」を削除しますか？\nこの論題に含まれるデータ（${detail}）もすべて一括削除され、元に戻せません。`)) {
+      return;
+    }
+    els.topicDeleteBtn.textContent = "削除中...";
     await ensureTopicsSeededInDb();
-    if (!isLegacyTopic(targetId)) { for (const st of state.stages) await deleteDoc(stageDoc(st.id, targetId)); }
+    await Promise.all([
+      ...argSnap.docs.map((d) => deleteDoc(d.ref)),
+      ...stSnap.docs.map((d) => deleteDoc(d.ref)),
+      ...comSnap.docs.map((d) => deleteDoc(d.ref))
+    ]);
     await deleteDoc(doc(db, "topics", targetId));
+    try { localStorage.removeItem(evalStorageKey(targetId)); } catch {}
     els.topicDialog.close();
     await loadTopics();
     await switchTopic(state.topics[0]?.id || DEFAULT_TOPIC.id);
-  } catch (err) { console.error(err); els.topicError.textContent = "削除に失敗しました。"; els.topicError.hidden = false; }
+  } catch (err) {
+    console.error(err);
+    els.topicError.textContent = "削除に失敗しました。";
+    els.topicError.hidden = false;
+  } finally {
+    els.topicDeleteBtn.disabled = false;
+    els.topicDeleteBtn.textContent = origLabel;
+  }
 });
 
 els.stageForm.addEventListener("submit", async (e) => {
@@ -1876,17 +1904,48 @@ els.stageForm.addEventListener("submit", async (e) => {
 
 els.stageDeleteBtn.addEventListener("click", async () => {
   if (!db || !state.isAdmin || !state.editingStageId) return;
-  const targetId = state.editingStageId, linked = state.rawArguments.filter((a) => a.stage === targetId).length;
-  if (linked > 0) { els.stageError.textContent = `この水準には ${linked} 件の命題が紐づいています。`; els.stageError.hidden = false; return; }
-  if (!confirm(`水準 ${targetId} を削除しますか？`)) return;
+  const targetId = state.editingStageId;
+  els.stageError.hidden = true;
+  const linkedRawArgs = state.rawArguments.filter((a) => a.stage === targetId);
+  const displayArgCount = state.arguments.filter((a) => a.stage === targetId).length;
+  const targetCoords = new Set([...linkedRawArgs.map((a) => a.coord), `${targetId}.00`]);
+  const msg = displayArgCount > 0
+    ? `水準 ${targetId} を削除しますか？\nこの水準に含まれる命題 ${displayArgCount}件と関連コメントもすべて一括削除され、元に戻せません。`
+    : `水準 ${targetId} を削除しますか？`;
+  if (!confirm(msg)) return;
+
+  const origLabel = els.stageDeleteBtn.textContent;
+  els.stageDeleteBtn.disabled = true;
+  els.stageDeleteBtn.textContent = "削除中...";
   try {
     await ensureStagesSeededInDb();
+    const comSnap = await getDocs(commentsCollection());
+    const targetComments = comSnap.docs.filter((d) => targetCoords.has(String(d.data()?.coord ?? "").trim()));
+    await Promise.all([
+      ...linkedRawArgs.map((a) => deleteDoc(argumentDoc(a.coord))),
+      ...targetComments.map((d) => deleteDoc(d.ref))
+    ]);
     await deleteDoc(stageDoc(targetId));
     els.stageDialog.close();
-    await loadStages();
+    await Promise.all([loadStages(), loadArguments(), loadCommentCounts()]);
     if (state.stage === targetId) state.stage = state.stages[0]?.id || "all";
+    if (!findArg(state.selectedCoord)) {
+      const nextFirst = state.stage !== "all"
+        ? (state.arguments.find((a) => a.stage === state.stage) || state.arguments[0])
+        : state.arguments[0];
+      state.selectedCoord = nextFirst ? nextFirst.coord : "";
+      if (state.detailOpen) closeDetailView({ restoreScroll: false });
+    }
     renderAll();
-  } catch (err) { console.error(err); els.stageError.textContent = "削除に失敗しました。"; els.stageError.hidden = false; }
+    await loadCommentsForCoord(state.selectedCoord);
+  } catch (err) {
+    console.error(err);
+    els.stageError.textContent = "削除に失敗しました。";
+    els.stageError.hidden = false;
+  } finally {
+    els.stageDeleteBtn.disabled = false;
+    els.stageDeleteBtn.textContent = origLabel;
+  }
 });
 
 els.argForm.addEventListener("submit", async (e) => {
