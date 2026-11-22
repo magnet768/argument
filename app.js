@@ -4,8 +4,8 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, dele
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 
 // ★管理者へのコメント投稿時にメール通知を送るための Formspree エンドポイントURL
-// 例: "https://formspree.io/f/xdegwegn" （空欄の場合は通知をスキップします）
-const ADMIN_NOTIFY_ENDPOINT = "";
+// 例: "https://formspree.io/f/xxxxxxxx" （空欄の場合は通知をスキップします）
+const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
 const TOPIC_COMMENT_COORD = "__topic__";
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
@@ -48,7 +48,7 @@ const els = {
   stageTabs: $("stage-tabs"), stageBanner: $("stage-banner"), argList: $("argument-list"), comparePanel: $("compare-panel"),
   topicCommentsSection: $("topic-comments-section"),
   searchInput: $("search-input"), modeButtons: document.querySelectorAll(".mode-btn"), statusNotice: $("status-notice"),
-  adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), backupOpenBtn: $("backup-open-btn"), seedDbBtn: $("seed-db-btn"),
+  adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), backupOpenBtn: $("backup-open-btn"),
   loginOpenBtn: $("login-open-btn"), logoutBtn: $("logout-btn"),
   loginDialog: $("login-dialog"), loginForm: $("login-form"), loginEmail: $("login-email"), loginPassword: $("login-password"), loginError: $("login-error"),
   profileDialog: $("profile-dialog"), profileForm: $("profile-form"), profileName: $("profile-name"), profileRole: $("profile-role"), profileError: $("profile-error"),
@@ -988,7 +988,7 @@ async function loadArguments() {
     if (snap.empty) {
       if (legacy) {
         state.rawArguments = DEFAULT_ARGUMENTS.map(normalizeArg);
-        showNotice("データベースに命題が未登録です。左上のメニューから管理者ログイン後、「初期データをDBへ投入」を押すと初期データが登録されます。");
+        showNotice("データベースに命題が未登録です。左上のメニューから管理者ログイン後、「バックアップ / 復元」または「+ 新規命題を追加」から登録できます。");
       } else { state.rawArguments = []; showNotice(""); }
     } else {
       const rows = [];
@@ -1071,25 +1071,6 @@ async function switchTopic(topicId) {
   state.selectedCoord = first ? first.coord : "";
   renderAll();
   await loadCommentsForCoord(state.selectedCoord);
-}
-async function seedInitialDataToFirestore() {
-  if (!db || !state.isAdmin || !isLegacyTopic()) return;
-  const defaultStages = getDefaultStagesList();
-  if (!confirm(`data.js の初期データ（水準 ${defaultStages.length}件・命題 ${DEFAULT_ARGUMENTS.length}件）をデータベースへ書き込みますか？（同じ番号・座標が存在する場合は上書きされます）`)) return;
-  els.seedDbBtn.disabled = true;
-  els.seedDbBtn.textContent = "投入中...";
-  try {
-    await ensureTopicsSeededInDb();
-    for (const st of defaultStages) await setDoc(stageDoc(st.id), { ...st, updatedAt: serverTimestamp() });
-    for (const raw of DEFAULT_ARGUMENTS) {
-      const item = normalizeArg(raw);
-      await setDoc(argumentDoc(item.coord), { ...item, updatedAt: serverTimestamp() });
-    }
-    await Promise.all([loadTopics(), loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
-    renderAll();
-    alert("初期データ（論題・水準・命題）の投入が完了しました。");
-  } catch (err) { console.error(err); alert("投入に失敗しました。Firestoreのルールと管理者UIDを確認してください。"); }
-  finally { els.seedDbBtn.disabled = false; els.seedDbBtn.textContent = "初期データをDBへ投入"; }
 }
 
 // === 描画関数 ===
@@ -1302,7 +1283,6 @@ function renderAdminBar() {
   els.addStageBtn.hidden = !state.isAdmin;
   els.addArgBtn.hidden = !state.isAdmin;
   els.backupOpenBtn.hidden = !state.isAdmin;
-  els.seedDbBtn.hidden = !(state.isAdmin && isLegacyTopic());
   els.logoutBtn.hidden = !state.isAdmin;
   els.loginOpenBtn.hidden = state.isAdmin || !isFirebaseConfigured;
 }
@@ -1839,7 +1819,6 @@ els.backupRestoreBtn.addEventListener("click", handleBackupRestore);
 els.addStageBtn.addEventListener("click", () => openStageDialog(null));
 els.inlineAddStageBtn.addEventListener("click", () => openStageDialog(null));
 els.addArgBtn.addEventListener("click", () => openArgDialog(null));
-els.seedDbBtn.addEventListener("click", seedInitialDataToFirestore);
 
 els.topicForm.addEventListener("submit", async (e) => {
   e.preventDefault();
