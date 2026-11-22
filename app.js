@@ -161,35 +161,76 @@ const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; };
 
-// === スマホ用スマート固定ヘッダー（下スクロールで隠し、上スクロールで再表示） ===
-function showSiteHeader() {
-  els.siteHeader?.classList.remove("is-header-hidden");
+// === スマホ用スクロール連動ヘッダー（指の動きに合わせて滑らかに出入り） ===
+let resetMobileHeader = () => {};
+
+function showSiteHeader({ animate = true } = {}) {
+  resetMobileHeader(animate);
 }
 
 function initMobileSmartHeader() {
   const header = els.siteHeader;
   if (!header) return;
+
   let lastY = Math.max(0, window.scrollY);
-  let upAccum = 0;
-  let downAccum = 0;
+  let offset = 0; // 0（完全表示）〜 -maxHide（完全非表示）
+  let upDeadzone = 0;
+  let snapTimer = null;
   let ticking = false;
-  const SHOW_UP_THRESHOLD = 48;   // 上方向へ48px以上スクロールで再表示
-  const HIDE_DOWN_THRESHOLD = 20; // 下方向へ20px以上スクロールで非表示
+  const UP_DEADZONE_PX = 28; // 上スクロール開始からヘッダーが動き出すまでの遊び
+
+  const getMaxHide = () => header.offsetHeight + 8;
+
+  const applyTransform = (nextOffset, { animate = false } = {}) => {
+    const maxHide = getMaxHide();
+    offset = Math.max(-maxHide, Math.min(0, nextOffset));
+    header.classList.toggle("is-header-snapping", animate);
+    if (!isMobileViewport()) {
+      header.style.transform = "";
+      header.classList.remove("is-header-hidden", "is-header-snapping");
+      offset = 0;
+      return;
+    }
+    header.style.transform = offset === 0 ? "" : `translate3d(0, ${offset}px, 0)`;
+    header.classList.toggle("is-header-hidden", offset <= -maxHide + 1);
+  };
+
+  resetMobileHeader = (animate = false) => {
+    clearTimeout(snapTimer);
+    upDeadzone = 0;
+    lastY = Math.max(0, window.scrollY);
+    applyTransform(0, { animate });
+  };
+
+  const scheduleSnap = () => {
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(() => {
+      if (!isMobileViewport() || state.page !== "explorer" || state.detailOpen || state.drawerOpen) return;
+      const maxHide = getMaxHide();
+      if (offset === 0 || offset <= -maxHide) return;
+      const currentY = Math.max(0, window.scrollY);
+      if (currentY <= maxHide) {
+        applyTransform(0, { animate: true });
+        return;
+      }
+      const visibleRatio = 1 + offset / maxHide;
+      applyTransform(visibleRatio >= 0.35 ? 0 : -maxHide, { animate: true });
+    }, 160);
+  };
 
   const update = () => {
     ticking = false;
     if (!isMobileViewport() || state.page !== "explorer" || state.detailOpen || state.drawerOpen) {
-      header.classList.remove("is-header-hidden");
-      lastY = Math.max(0, window.scrollY);
-      upAccum = 0;
-      downAccum = 0;
+      resetMobileHeader(false);
       return;
     }
 
     const currentY = Math.max(0, window.scrollY);
     const delta = currentY - lastY;
     lastY = currentY;
+    if (delta === 0) return;
 
+    const maxHide = getMaxHide();
     const activeEl = document.activeElement;
     const isEditingInHeader = Boolean(
       activeEl &&
@@ -197,26 +238,38 @@ function initMobileSmartHeader() {
       ["INPUT", "TEXTAREA", "SELECT"].includes(activeEl.tagName)
     );
 
-    if (currentY <= 16 || isEditingInHeader) {
-      header.classList.remove("is-header-hidden");
-      upAccum = 0;
-      downAccum = 0;
+    if (currentY <= 4 || isEditingInHeader) {
+      clearTimeout(snapTimer);
+      upDeadzone = 0;
+      applyTransform(0, { animate: false });
       return;
     }
 
     if (delta > 0) {
-      downAccum += delta;
-      upAccum = 0;
-      const hideAfterY = Math.max(80, header.offsetHeight);
-      if (currentY > hideAfterY && downAccum >= HIDE_DOWN_THRESHOLD) {
-        header.classList.add("is-header-hidden");
+      upDeadzone = 0;
+      const minAllowed = -Math.min(currentY, maxHide);
+      const nextOffset = Math.max(minAllowed, offset - delta);
+      applyTransform(nextOffset, { animate: false });
+      scheduleSnap();
+    } else {
+      const upDist = -delta;
+      let moveUp = upDist;
+      if (offset <= -maxHide + 1) {
+        if (upDeadzone < UP_DEADZONE_PX) {
+          const remain = UP_DEADZONE_PX - upDeadzone;
+          if (upDist <= remain) {
+            upDeadzone += upDist;
+            return;
+          }
+          upDeadzone = UP_DEADZONE_PX;
+          moveUp = upDist - remain;
+        }
       }
-    } else if (delta < 0) {
-      upAccum += -delta;
-      downAccum = 0;
-      if (upAccum >= SHOW_UP_THRESHOLD) {
-        header.classList.remove("is-header-hidden");
-      }
+      const nextOffset = currentY <= maxHide
+        ? Math.min(0, Math.max(offset + moveUp, -currentY))
+        : Math.min(0, offset + moveUp);
+      applyTransform(nextOffset, { animate: false });
+      scheduleSnap();
     }
   };
 
@@ -228,7 +281,7 @@ function initMobileSmartHeader() {
   }, { passive: true });
 
   window.addEventListener("resize", () => {
-    if (!isMobileViewport()) showSiteHeader();
+    if (!isMobileViewport()) resetMobileHeader(false);
   });
 }
 
@@ -917,7 +970,7 @@ function focusCard(coord) {
 // === ドロワー・ページ切替・詳細ビュー ===
 function openNavDrawer() {
   state.drawerOpen = true;
-  showSiteHeader();
+  showSiteHeader({ animate: false });
   els.navBackdrop.hidden = false;
   els.navDrawer.classList.add("is-open");
   els.navDrawer.setAttribute("aria-hidden", "false");
@@ -939,7 +992,7 @@ const applyDetailBodyClass = () => {
 function switchPage(nextPage) {
   if (!["explorer", "guide", "profile"].includes(nextPage)) return;
   closeNavDrawer();
-  showSiteHeader();
+  showSiteHeader({ animate: false });
   state.page = nextPage;
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
@@ -959,7 +1012,7 @@ function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false 
   state.selectedCoord = coord;
   state.editingCommentId = null;
   state.detailOpen = true;
-  showSiteHeader();
+  showSiteHeader({ animate: false });
   applyDetailBodyClass();
   renderPageVisibility();
   if (pushBrowserHistory && !wasOpen) {
@@ -980,7 +1033,7 @@ function closeDetailView({ restoreScroll = true } = {}) {
   state.detailOpen = false;
   state.pushedDetailHistory = false;
   state.editingCommentId = null;
-  showSiteHeader();
+  showSiteHeader({ animate: false });
   applyDetailBodyClass();
   renderAll();
   if (restoreScroll) requestAnimationFrame(() => window.scrollTo({ top: state.savedListScrollY, behavior: "instant" }));

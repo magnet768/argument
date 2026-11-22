@@ -1947,12 +1947,14 @@ body.is-detail-view .detail-pager {
     position: sticky;
     top: 0;
     z-index: 20;
-    transition: transform 0.24s ease;
     will-change: transform;
   }
 
+  .site-header.is-header-snapping {
+    transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .site-header.is-header-hidden {
-    transform: translateY(calc(-100% - 8px));
     pointer-events: none;
   }
 }
