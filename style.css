@@ -1937,7 +1937,7 @@ body.is-detail-view .detail-pager {
 
 .mode-btn[data-mode="mine"].is-active,
 .mode-btn[data-mode="mine"].is-active:hover {
-  background: #facc15;
-  border-color: #eab308;
-  color: #1e293b;
+  background: #ffd700;
+  border-color: #e0bd00;
+  color: #0f172a;
 }
