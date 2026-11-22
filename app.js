@@ -8,6 +8,7 @@ import { firebaseConfig, ADMIN_UID } from "./firebase-config.js";
 const ADMIN_NOTIFY_ENDPOINT = "https://formspree.io/f/xdegwegn";
 const TOPIC_COMMENT_COORD = "__topic__";
 const LEGACY_TOPIC_ID = "antinatalism";
+const MEMO_STORAGE_KEY = "arg_explorer_private_memos_v1";
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
@@ -30,6 +31,7 @@ const state = {
   stages: [], stagesInDb: false, rawArguments: [], arguments: [],
   commentCounts: {},
   topicComments: [], topicCommentsLoading: false, editingTopicCommentId: null,
+  memos: {}, editingMemoKey: null,
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
   editingCommentId: null, editingTopicId: null, editingCoord: null, editingStageId: null,
@@ -48,6 +50,7 @@ const els = {
   explorerView: $("explorer-view"), guideView: $("guide-view"), profileView: $("profile-view"), profileContent: $("profile-content"),
   topicSelect: $("topic-select"), editTopicBtn: $("edit-topic-btn"), addTopicBtn: $("add-topic-btn"),
   stageTabs: $("stage-tabs"), stageBanner: $("stage-banner"), argList: $("argument-list"), comparePanel: $("compare-panel"),
+  topicMemoSection: $("topic-memo-section"),
   topicCommentsSection: $("topic-comments-section"),
   searchInput: $("search-input"), modeButtons: document.querySelectorAll(".mode-btn"), statusNotice: $("status-notice"),
   adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), backupOpenBtn: $("backup-open-btn"),
@@ -161,6 +164,248 @@ const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; syncComparePanelStickyTop(); };
 
+// === 自分用メモ（非公開・localStorage 保存・言及検出＆ジャンプ） ===
+function loadMemos() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(MEMO_STORAGE_KEY) || "{}");
+    state.memos = parsed && typeof parsed === "object" ? parsed : {};
+  } catch { state.memos = {}; }
+}
+
+function saveMemos() {
+  try { localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(state.memos)); } catch {}
+}
+
+function getMemosFor(topicId, coord = TOPIC_COMMENT_COORD) {
+  const bucket = state.memos[topicId];
+  if (!bucket || !Array.isArray(bucket[coord])) return [];
+  return bucket[coord];
+}
+
+function makeMemoEditKey(topicId, coord, memoId) {
+  return `${topicId}::${coord}::${memoId}`;
+}
+
+function buildMemoMetaSnapshot(topicId, coord) {
+  const topicObj = findTopic(topicId);
+  const meta = { topicTitle: topicObj ? topicObj.title : topicId };
+  if (coord !== TOPIC_COMMENT_COORD && topicId === state.currentTopicId) {
+    const item = findArg(coord);
+    if (item) {
+      meta.stage = item.stage;
+      meta.argTopic = item.topic;
+      meta.plusTitle = item.plusTitle;
+      meta.minusTitle = item.minusTitle;
+    }
+  }
+  return meta;
+}
+
+function addPrivateMemo(topicId, coord, body) {
+  const cleanBody = String(body ?? "").trim();
+  if (!topicId || !coord || !cleanBody) return;
+  if (!state.memos[topicId] || typeof state.memos[topicId] !== "object") state.memos[topicId] = {};
+  if (!Array.isArray(state.memos[topicId][coord])) state.memos[topicId][coord] = [];
+  const meta = buildMemoMetaSnapshot(topicId, coord);
+  const entry = {
+    id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    body: cleanBody,
+    createdAt: Date.now(),
+    updatedAt: null,
+    ...meta
+  };
+  state.memos[topicId][coord].unshift(entry);
+  saveMemos();
+}
+
+function updatePrivateMemo(topicId, coord, memoId, body) {
+  const cleanBody = String(body ?? "").trim();
+  if (!cleanBody) return;
+  const list = getMemosFor(topicId, coord);
+  const target = list.find((m) => m.id === memoId);
+  if (!target) return;
+  target.body = cleanBody;
+  target.updatedAt = Date.now();
+  Object.assign(target, buildMemoMetaSnapshot(topicId, coord));
+  saveMemos();
+}
+
+function deletePrivateMemo(topicId, coord, memoId) {
+  const list = getMemosFor(topicId, coord);
+  if (list.length === 0) return;
+  const next = list.filter((m) => m.id !== memoId);
+  if (next.length > 0) state.memos[topicId][coord] = next;
+  else {
+    delete state.memos[topicId][coord];
+    if (Object.keys(state.memos[topicId]).length === 0) delete state.memos[topicId];
+  }
+  saveMemos();
+}
+
+function deleteTopicMemos(topicId) {
+  if (state.memos[topicId]) {
+    delete state.memos[topicId];
+    saveMemos();
+  }
+}
+
+function deleteStageMemos(topicId, coordsSet) {
+  const bucket = state.memos[topicId];
+  if (!bucket) return;
+  let changed = false;
+  for (const c of coordsSet) {
+    if (bucket[c]) { delete bucket[c]; changed = true; }
+  }
+  if (changed) {
+    if (Object.keys(bucket).length === 0) delete state.memos[topicId];
+    saveMemos();
+  }
+}
+
+function extractMemoMentions(body, baseTopicId, selfCoord = TOPIC_COMMENT_COORD) {
+  const raw = String(body ?? "");
+  if (!raw) return [];
+  const normalized = raw
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/．/g, ".")
+    .replace(/＋/g, "+")
+    .replace(/[－ー―]/g, "-")
+    .replace(/／/g, "/");
+
+  const results = [];
+  const seen = new Set();
+  const pushMention = ({ topicId, coord = "", mode = "", label }) => {
+    const key = `${topicId}|${coord}|${mode}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    results.push({ topicId, coord, mode, label });
+  };
+
+  // 1. 「論題ID/座標」形式（例：relativism/+1.10）
+  const topicCoordRegex = /([a-zA-Z0-9_-]+)\/([±+-]?\d+\.\d+[a-zA-Z]?)/g;
+  for (const m of normalized.matchAll(topicCoordRegex)) {
+    const tid = m[1];
+    const topicObj = findTopic(tid);
+    if (!topicObj) continue;
+    const token = m[2];
+    const mode = token.startsWith("+") ? "plus" : token.startsWith("-") ? "minus" : "";
+    const coord = token.replace(/^[±+-]/, "");
+    const item = tid === state.currentTopicId ? findArg(coord) : null;
+    const heading = item ? (mode === "plus" ? item.plusTitle : mode === "minus" ? item.minusTitle : (item.topic || item.plusTitle)) : "";
+    const shortTitle = topicObj.title.split(/[：:]/)[0].trim();
+    const label = heading ? `${shortTitle} / ${token} ${heading}` : `${shortTitle} / ${token}`;
+    pushMention({ topicId: tid, coord, mode, label });
+  }
+
+  // 2. 座標トークン（例：+1.10, -2.11, ±1.20, 1.10）
+  const coordRegex = /(?<![a-zA-Z0-9_/.\d])([±+-]?)(\d+\.\d+[a-zA-Z]?)(?![a-zA-Z0-9_\d])/g;
+  for (const m of normalized.matchAll(coordRegex)) {
+    const sign = m[1];
+    const coord = m[2];
+    const mode = sign === "+" ? "plus" : sign === "-" ? "minus" : "";
+    if (baseTopicId === state.currentTopicId) {
+      const item = findArg(coord);
+      if (!item) continue;
+      if (coord === selfCoord && !mode) continue;
+      const heading = mode === "plus" ? item.plusTitle : mode === "minus" ? item.minusTitle : (item.topic || item.plusTitle);
+      const dispCoord = sign ? `${sign}${coord}` : coord;
+      const label = heading ? `${dispCoord} ${heading}` : `座標 ${dispCoord}`;
+      pushMention({ topicId: baseTopicId, coord, mode, label });
+    } else {
+      if (coord === selfCoord && !mode) continue;
+      const topicObj = findTopic(baseTopicId);
+      const shortTitle = topicObj ? topicObj.title.split(/[：:]/)[0].trim() : baseTopicId;
+      const dispCoord = sign ? `${sign}${coord}` : coord;
+      pushMention({ topicId: baseTopicId, coord, mode, label: `${shortTitle} / ${dispCoord}` });
+    }
+  }
+
+  // 3. 論題名への言及（タイトル全文またはコロン前の主題名）
+  for (const t of state.topics) {
+    if (t.id === baseTopicId && selfCoord === TOPIC_COMMENT_COORD) continue;
+    const shortTitle = t.title.split(/[：:]/)[0].trim();
+    const hitFull = raw.includes(t.title);
+    const hitShort = shortTitle.length >= 3 && raw.includes(shortTitle);
+    if (hitFull || hitShort) {
+      pushMention({ topicId: t.id, coord: "", mode: "", label: `論題：${t.title}` });
+    }
+  }
+
+  return results;
+}
+
+function renderMemoMentionsHtml(body, baseTopicId, selfCoord = TOPIC_COMMENT_COORD) {
+  const mentions = extractMemoMentions(body, baseTopicId, selfCoord);
+  if (mentions.length === 0) return "";
+  return `<div class="memo-mentions-row"><span>言及先:</span>${mentions.map((m) =>
+    `<button type="button" class="memo-jump-chip js-jump-memo-target" data-topic-id="${escapeHtml(m.topicId)}" data-coord="${escapeHtml(m.coord)}" data-mode="${escapeHtml(m.mode)}">${escapeHtml(m.label)} →</button>`
+  ).join("")}</div>`;
+}
+
+async function jumpToMemoTarget(topicId, coord = "", targetMode = "") {
+  const tid = topicId && findTopic(topicId) ? topicId : state.currentTopicId;
+  const switchedTopic = tid !== state.currentTopicId;
+  if (switchedTopic) {
+    state.page = "explorer";
+    await switchTopic(tid);
+  }
+
+  if (coord) {
+    const cleanCoord = normalizeCoordInput(coord).replace(/^[±+-]/, "");
+    const found = findArg(cleanCoord);
+    if (found) {
+      if (state.query) { state.query = ""; els.searchInput.value = ""; }
+      const nextMode = (targetMode === "plus" || targetMode === "minus")
+        ? targetMode
+        : (state.mode === "memo" ? "split" : state.mode);
+      state.page = "explorer";
+      if (isMobileViewport()) {
+        state.stage = found.stage;
+        state.mode = nextMode;
+        openDetailView(found.coord, { resetScroll: true });
+      } else {
+        jumpTo(found.coord, nextMode);
+      }
+      return;
+    }
+  }
+
+  // 論題全体へのジャンプ
+  state.page = "explorer";
+  if (state.mode === "memo") state.mode = "plus";
+  if (state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
+  showSiteHeader();
+  renderAll();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderMemoItemsListHtml(topicId, coord, memos) {
+  if (!memos || memos.length === 0) return "";
+  return `<ul class="comment-list">${memos.map((m) => {
+    const editKey = makeMemoEditKey(topicId, coord, m.id);
+    if (state.editingMemoKey === editKey) {
+      return `<li class="comment-item memo-item"><form class="mini-form js-memo-edit-form" data-topic-id="${escapeHtml(topicId)}" data-coord="${escapeHtml(coord)}" data-id="${escapeHtml(m.id)}">
+        <textarea name="body" rows="3" maxlength="2000" required>${escapeHtml(m.body)}</textarea>
+        <div class="comment-edit-actions">
+          <button type="button" class="btn-secondary js-cancel-edit-memo">キャンセル</button>
+          <button type="submit" class="btn-primary">メモを保存</button>
+        </div>
+      </form></li>`;
+    }
+    const mentionsHtml = renderMemoMentionsHtml(m.body, topicId, coord);
+    return `<li class="comment-item memo-item"><div class="comment-meta"><div>
+        <span class="memo-private-badge">自分用</span>
+        <span>${escapeHtml(formatDate(m.createdAt))}</span>
+        ${m.updatedAt ? `<span class="comment-edited-tag">（編集済み）</span>` : ""}
+      </div><div class="comment-actions">
+        <button type="button" class="btn-xs-edit js-edit-memo" data-topic-id="${escapeHtml(topicId)}" data-coord="${escapeHtml(coord)}" data-id="${escapeHtml(m.id)}">編集</button>
+        <button type="button" class="btn-xs-danger js-delete-memo" data-topic-id="${escapeHtml(topicId)}" data-coord="${escapeHtml(coord)}" data-id="${escapeHtml(m.id)}">削除</button>
+      </div></div>
+      <p class="memo-body">${escapeHtml(m.body)}</p>
+      ${mentionsHtml}</li>`;
+  }).join("")}</ul>`;
+}
+
 // === PC版：右側詳細パネルの初期位置と高さを一覧と揃えて固定 ===
 let lastStickyTopStr = "";
 let lastPanelHeightStr = "";
@@ -183,7 +428,7 @@ function syncComparePanelStickyTop() {
   }
 
   const viewportAvailable = Math.max(220, window.innerHeight - exactTop - 20);
-  const cards = els.argList ? els.argList.querySelectorAll(".arg-card") : [];
+  const cards = els.argList ? els.argList.querySelectorAll(".arg-card, .memo-card") : [];
   const lastCard = cards.length > 0 ? cards[cards.length - 1] : null;
   let panelHeight = viewportAvailable;
   if (lastCard) {
@@ -450,7 +695,7 @@ function parseBackupMarkdown(text) {
   let currentBundle = null;
   let currentStage = null;
   let currentArg = null;
-  let section = null; // "stagePlus" | "stageMinus" | "argPlus" | "argMinus" | "bib"
+  let section = null;
   let buffer = [];
 
   const flush = () => {
@@ -560,7 +805,6 @@ function parseBackupMarkdown(text) {
       continue;
     }
 
-    // 論題のメタ情報
     if (!currentStage && !currentArg && !section) {
       const idM = trimmed.match(/^-\s*論題ID[:：]\s*(.+)$/);
       if (idM) { currentBundle.topic.id = idM[1].trim(); continue; }
@@ -572,7 +816,6 @@ function parseBackupMarkdown(text) {
       if (orderM) { currentBundle.topic.order = Number(orderM[1]); continue; }
     }
 
-    // 命題のメタ情報
     if (currentArg && !section) {
       const refM = trimmed.match(/^-\s*前提[:：]\s*(.*)$/);
       if (refM) {
@@ -584,7 +827,6 @@ function parseBackupMarkdown(text) {
       }
     }
 
-    // 参考文献
     if (section === "bib" && currentArg) {
       const urlM = rawLine.match(/^\s+-\s*URL[:：]\s*(.+)$/i);
       if (urlM && currentArg.bibliography.length > 0) {
@@ -610,7 +852,6 @@ function parseBackupMarkdown(text) {
   }
   flush();
 
-  // バリデーション
   if (bundles.length === 0) {
     throw new Error("論題が見つかりませんでした。「# 論題: ...」の形式で記述されたバックアップテキストを指定してください。");
   }
@@ -1037,6 +1278,7 @@ const applyDetailBodyClass = () => {
   const open = state.page === "explorer" && state.detailOpen;
   document.body.classList.toggle("is-detail-view", open);
   if (els.topicCommentsSection) els.topicCommentsSection.hidden = open;
+  if (els.topicMemoSection) els.topicMemoSection.hidden = open || state.mode === "memo";
 };
 
 function switchPage(nextPage) {
@@ -1047,6 +1289,7 @@ function switchPage(nextPage) {
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
   state.editingAdminCommentId = null;
+  state.editingMemoKey = null;
   if (nextPage !== "explorer" && state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; }
   renderAll();
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -1061,6 +1304,7 @@ function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false 
   state.page = "explorer";
   state.selectedCoord = coord;
   state.editingCommentId = null;
+  state.editingMemoKey = null;
   state.detailOpen = true;
   showSiteHeader({ animate: false });
   applyDetailBodyClass();
@@ -1083,6 +1327,7 @@ function closeDetailView({ restoreScroll = true } = {}) {
   state.detailOpen = false;
   state.pushedDetailHistory = false;
   state.editingCommentId = null;
+  state.editingMemoKey = null;
   showSiteHeader({ animate: false });
   applyDetailBodyClass();
   renderAll();
@@ -1244,6 +1489,7 @@ async function switchTopic(topicId) {
   state.commentCounts = {};
   state.editingCommentId = null;
   state.editingTopicCommentId = null;
+  state.editingMemoKey = null;
   showSiteHeader();
   if (state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
   await Promise.all([loadStages(), loadArguments(), loadCommentCounts(), loadTopicComments()]);
@@ -1263,7 +1509,8 @@ function getFilteredArguments() {
     if (state.stage !== "all" && item.stage !== state.stage) return false;
     if (!q) return true;
     const bib = item.bibliography.map((b) => `${b.citation} ${b.note}`).join(" ");
-    return [item.coord, `+${item.coord}`, `-${item.coord}`, item.topic, item.plusTitle, item.plusBody, item.minusTitle, item.minusBody, bib].join(" ").toLowerCase().includes(q);
+    const memosText = getMemosFor(state.currentTopicId, item.coord).map((m) => m.body).join(" ");
+    return [item.coord, `+${item.coord}`, `-${item.coord}`, item.topic, item.plusTitle, item.plusBody, item.minusTitle, item.minusBody, bib, memosText].join(" ").toLowerCase().includes(q);
   });
 }
 function populateStageSelect(selectedId) {
@@ -1389,6 +1636,29 @@ function renderProfilePage() {
     </div>`;
 }
 
+function renderTopicMemoSection() {
+  if (!els.topicMemoSection) return;
+  const topic = getCurrentTopic();
+  const memos = getMemosFor(topic.id, TOPIC_COMMENT_COORD);
+  const listHtml = memos.length === 0
+    ? `<p class="empty-muted">この論題への自分用メモはまだありません。</p>`
+    : renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, memos);
+
+  els.topicMemoSection.innerHTML = `
+    <section class="panel-section" style="margin-top: 0; padding-top: 0; border-top: none;">
+      <h3 class="panel-section-title">
+        <span>✎ この論題への自分用メモ（非公開）</span>
+        <span class="memo-count-pill">${memos.length}件</span>
+      </h3>
+      <p class="memo-section-lead">このメモはお使いのブラウザ内のみに保存され、他の閲覧者には見えません。本文に座標（例：<code>+1.10</code> や <code>2.10</code>）や他の論題名を書くとジャンプ用リンクが自動表示されます。</p>
+      ${listHtml}
+      <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topic.id)}" data-coord="${TOPIC_COMMENT_COORD}">
+        <textarea name="body" rows="3" maxlength="2000" required placeholder="論題「${escapeHtml(topic.title)}」に関する自分用の覚え書きを記入（最大2000文字）"></textarea>
+        <button type="submit" class="btn-primary">自分用メモを追加</button>
+      </form>
+    </section>`;
+}
+
 function renderTopicCommentsSection() {
   if (!els.topicCommentsSection) return;
   const topic = getCurrentTopic();
@@ -1481,6 +1751,7 @@ function renderModeButtons() {
     if (m === "minus") btn.textContent = `- ${topic.minusLabel}`;
     if (m === "split") btn.textContent = "⇄ 比較";
     if (m === "mine") btn.textContent = "☆ 自説";
+    if (m === "memo") btn.textContent = "✎ メモ";
     btn.classList.toggle("is-active", m === state.mode);
   });
 }
@@ -1504,7 +1775,147 @@ function renderRefChips(refs, label) {
   return `<div class="ref-row"><span>${escapeHtml(label)}:</span>${refs.map((c) => `<button type="button" class="ref-chip js-ref-btn" data-ref="${escapeHtml(c)}">±${escapeHtml(c)}</button>`).join("")}</div>`;
 }
 
+function renderMemoModeList() {
+  const topic = getCurrentTopic();
+  const q = state.query.trim().toLowerCase();
+  const matchesQuery = (texts) => !q || texts.join(" ").toLowerCase().includes(q);
+  let html = "";
+
+  // 1. 現在の論題へのメモ
+  const topicMemos = getMemosFor(topic.id, TOPIC_COMMENT_COORD).filter((m) => matchesQuery([topic.title, m.body]));
+  if (!q || topicMemos.length > 0 || topic.title.toLowerCase().includes(q)) {
+    html += `<div class="topic-group"><h3 class="topic-heading">論題への自分用メモ</h3>
+      <article class="memo-card">
+        <div class="memo-target-head">
+          <div class="memo-target-info">
+            <div class="memo-target-kicker"><span class="memo-private-badge">論題メモ</span><span class="memo-count-pill">${topicMemos.length}件</span></div>
+            <button type="button" class="memo-target-title-btn js-jump-memo-target" data-topic-id="${escapeHtml(topic.id)}" data-coord="" data-mode="">${escapeHtml(topic.title)} →</button>
+          </div>
+          <div class="memo-target-actions">
+            <button type="button" class="flip-btn js-jump-memo-target" data-topic-id="${escapeHtml(topic.id)}" data-coord="" data-mode="">論題を開く →</button>
+          </div>
+        </div>
+        ${topicMemos.length > 0 ? renderMemoItemsListHtml(topic.id, TOPIC_COMMENT_COORD, topicMemos) : `<p class="empty-muted" style="margin: 0 0 10px;">この論題への自分用メモはまだありません。</p>`}
+        <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topic.id)}" data-coord="${TOPIC_COMMENT_COORD}" style="margin-top: 10px;">
+          <textarea name="body" rows="2" maxlength="2000" required placeholder="この論題への自分用メモを追加（例：+1.10 との関係を後で確認）"></textarea>
+          <button type="submit" class="btn-primary">論題メモを追加</button>
+        </form>
+      </article>
+    </div>`;
+  }
+
+  // 2. 現在の論題の命題メモ
+  const currentBucket = state.memos[topic.id] || {};
+  const coordEntries = Object.keys(currentBucket)
+    .filter((c) => c !== TOPIC_COMMENT_COORD && Array.isArray(currentBucket[c]) && currentBucket[c].length > 0)
+    .sort(compareNatural);
+
+  const visibleCoordCards = [];
+  for (const coord of coordEntries) {
+    const item = findArg(coord);
+    const memos = currentBucket[coord];
+    const stageId = item ? item.stage : (memos[0]?.stage || coord.split(".")[0] || "");
+    if (state.stage !== "all" && stageId !== state.stage) continue;
+
+    const argTopic = item ? item.topic : (memos[0]?.argTopic || "");
+    const plusTitle = item ? item.plusTitle : (memos[0]?.plusTitle || "");
+    const minusTitle = item ? item.minusTitle : (memos[0]?.minusTitle || "");
+    const filteredMemos = memos.filter((m) => matchesQuery([coord, `+${coord}`, `-${coord}`, argTopic, plusTitle, minusTitle, m.body]));
+    if (filteredMemos.length === 0) continue;
+
+    const sel = coord === state.selectedCoord ? "is-selected" : "";
+    const propHeadingsHtml = (plusTitle || minusTitle) ? `<div class="memo-prop-headings">
+      ${plusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-plus">+${escapeHtml(coord)}</span><span>${escapeHtml(plusTitle)}</span></div>` : ""}
+      ${minusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-minus">-${escapeHtml(coord)}</span><span>${escapeHtml(minusTitle)}</span></div>` : ""}
+    </div>` : "";
+
+    visibleCoordCards.push(`<article class="memo-card js-memo-coord-card ${sel}" data-coord="${escapeHtml(coord)}">
+      <div class="memo-target-head">
+        <div class="memo-target-info">
+          <div class="memo-target-kicker">
+            <span class="coord-badge is-neutral">座標 ${escapeHtml(coord)}</span>
+            <span class="memo-count-pill">✎ ${filteredMemos.length}件</span>
+          </div>
+          <button type="button" class="memo-target-title-btn js-jump-memo-target" data-topic-id="${escapeHtml(topic.id)}" data-coord="${escapeHtml(coord)}" data-mode="">${escapeHtml(argTopic || `座標 ${coord}`)} →</button>
+          ${propHeadingsHtml}
+        </div>
+        <div class="memo-target-actions">
+          <button type="button" class="flip-btn js-jump-memo-target" data-topic-id="${escapeHtml(topic.id)}" data-coord="${escapeHtml(coord)}" data-mode="">命題へ移動 →</button>
+        </div>
+      </div>
+      ${renderMemoItemsListHtml(topic.id, coord, filteredMemos)}
+    </article>`);
+  }
+
+  html += `<div class="topic-group"><h3 class="topic-heading">この論題の命題メモ${state.stage !== "all" ? `（水準 ${escapeHtml(state.stage)}）` : ""}</h3>`;
+  if (visibleCoordCards.length > 0) {
+    html += visibleCoordCards.join("");
+  } else {
+    const emptyMsg = q
+      ? "検索条件に一致する命題メモがありません。"
+      : "この範囲の命題メモはまだありません。各命題の詳細パネル内「自分用メモ」から作成できます。";
+    html += `<div class="empty-state">${emptyMsg}</div>`;
+  }
+  html += `</div>`;
+
+  // 3. 他の論題のメモ（存在する場合のみ表示）
+  const otherTopicIds = Object.keys(state.memos).filter((tid) => tid !== topic.id);
+  const otherCards = [];
+  for (const tid of otherTopicIds) {
+    const bucket = state.memos[tid];
+    if (!bucket || typeof bucket !== "object") continue;
+    const tObj = findTopic(tid);
+    const tTitle = tObj ? tObj.title : (Object.values(bucket).flat()[0]?.topicTitle || tid);
+    const keys = Object.keys(bucket).filter((k) => Array.isArray(bucket[k]) && bucket[k].length > 0);
+    keys.sort((a, b) => (a === TOPIC_COMMENT_COORD ? -1 : b === TOPIC_COMMENT_COORD ? 1 : compareNatural(a, b)));
+
+    for (const k of keys) {
+      const memos = bucket[k];
+      const isTopicMemo = k === TOPIC_COMMENT_COORD;
+      const argTopic = !isTopicMemo ? (memos[0]?.argTopic || "") : "";
+      const plusTitle = !isTopicMemo ? (memos[0]?.plusTitle || "") : "";
+      const minusTitle = !isTopicMemo ? (memos[0]?.minusTitle || "") : "";
+      const filteredMemos = memos.filter((m) => matchesQuery([tTitle, tid, isTopicMemo ? "" : k, argTopic, plusTitle, minusTitle, m.body]));
+      if (filteredMemos.length === 0) continue;
+
+      const headingText = isTopicMemo ? tTitle : `${tTitle} / ${argTopic || `座標 ${k}`}`;
+      const propHeadingsHtml = (!isTopicMemo && (plusTitle || minusTitle)) ? `<div class="memo-prop-headings">
+        ${plusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-plus">+${escapeHtml(k)}</span><span>${escapeHtml(plusTitle)}</span></div>` : ""}
+        ${minusTitle ? `<div class="memo-prop-heading-line"><span class="memo-prop-sign is-minus">-${escapeHtml(k)}</span><span>${escapeHtml(minusTitle)}</span></div>` : ""}
+      </div>` : "";
+
+      otherCards.push(`<article class="memo-card">
+        <div class="memo-target-head">
+          <div class="memo-target-info">
+            <div class="memo-target-kicker">
+              <span class="memo-private-badge">${isTopicMemo ? "他論題メモ" : `他論題・座標 ${escapeHtml(k)}`}</span>
+              <span class="memo-count-pill">✎ ${filteredMemos.length}件</span>
+            </div>
+            <button type="button" class="memo-target-title-btn js-jump-memo-target" data-topic-id="${escapeHtml(tid)}" data-coord="${isTopicMemo ? "" : escapeHtml(k)}" data-mode="">${escapeHtml(headingText)} →</button>
+            ${propHeadingsHtml}
+          </div>
+          <div class="memo-target-actions">
+            <button type="button" class="flip-btn js-jump-memo-target" data-topic-id="${escapeHtml(tid)}" data-coord="${isTopicMemo ? "" : escapeHtml(k)}" data-mode="">${isTopicMemo ? "論題へ移動 →" : "命題へ移動 →"}</button>
+          </div>
+        </div>
+        ${renderMemoItemsListHtml(tid, k, filteredMemos)}
+      </article>`);
+    }
+  }
+
+  if (otherCards.length > 0) {
+    html += `<div class="topic-group"><h3 class="topic-heading">他の論題の自分用メモ</h3>${otherCards.join("")}</div>`;
+  }
+
+  els.argList.innerHTML = html;
+}
+
 function renderList() {
+  if (state.mode === "memo") {
+    renderMemoModeList();
+    return;
+  }
+
   const filtered = getFilteredArguments();
   if (filtered.length === 0) {
     let hint = "条件に一致する命題がありません。";
@@ -1534,13 +1945,15 @@ function renderList() {
       const bib = item.bibliography.length ? `<span class="bib-count-pill">文献 ${item.bibliography.length}</span>` : "";
       const commentCount = state.commentCounts[item.coord] || 0;
       const commentPill = commentCount > 0 ? `<span class="bib-count-pill" title="コメント ${commentCount}件">💬 ${commentCount}</span>` : "";
+      const memoCount = getMemosFor(state.currentTopicId, item.coord).length;
+      const memoPill = memoCount > 0 ? `<span class="memo-count-pill" title="自分用メモ ${memoCount}件">✎ ${memoCount}</span>` : "";
       const refsHtml = renderRefChips(item.refs, "前提命題");
       const evalHtml = renderEvalControl(item.coord);
       const ev = getEvaluation(item.coord);
 
       if (state.mode === "split" || (state.mode === "mine" && ev === "hold")) {
         html += `<article class="arg-card is-split ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}${commentPill}</div></div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}${commentPill}${memoPill}</div></div>
           <div class="split-grid">
             <div class="split-col is-plus"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.plusTitle)}</div><div>${escapeHtml(item.plusBody)}</div></div>
             <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${escapeHtml(item.minusBody)}</div></div>
@@ -1550,7 +1963,7 @@ function renderList() {
         const sign = isPlus ? "+" : "-", oppSign = isPlus ? "-" : "+", oppMode = isPlus ? "minus" : "plus";
         const title = isPlus ? item.plusTitle : item.minusTitle, body = isPlus ? item.plusBody : item.minusBody;
         html += `<article class="arg-card ${isPlus ? "is-plus" : "is-minus"} ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${bib}${commentPill}</div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${bib}${commentPill}${memoPill}</div>
           <button type="button" class="flip-btn js-flip-btn" data-coord="${escapeHtml(item.coord)}" data-target-mode="${oppMode}">⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button></div>
           <p class="card-body">${escapeHtml(body)}</p>${refsHtml}${evalHtml}</article>`;
       }
@@ -1576,6 +1989,27 @@ function renderBibliographySection(item) {
     <input type="text" id="bib-note" placeholder="関連箇所・メモ（任意）" />
     <button type="submit" class="btn-primary">参考文献を追加</button></form>` : "";
   return `<section class="panel-section" id="detail-bib-section"><h3 class="panel-section-title"><span>参考文献</span><span class="bib-count-pill">${item.bibliography.length}件</span></h3>${listHtml}${formHtml}</section>`;
+}
+
+function renderCoordMemoSection(item) {
+  const topicId = state.currentTopicId;
+  const memos = getMemosFor(topicId, item.coord);
+  const listHtml = memos.length === 0
+    ? `<p class="empty-muted">この座標への自分用メモはまだありません。</p>`
+    : renderMemoItemsListHtml(topicId, item.coord, memos);
+
+  return `<section class="panel-section" id="detail-memo-section">
+    <h3 class="panel-section-title">
+      <span>✎ 自分用メモ（非公開）</span>
+      <span class="memo-count-pill">${memos.length}件</span>
+    </h3>
+    <p class="memo-section-lead">この端末・ブラウザのみに保存されます。本文に座標（例：<code>+1.10</code>）や他の論題名を書くとジャンプできます。</p>
+    ${listHtml}
+    <form class="mini-form js-memo-add-form" data-topic-id="${escapeHtml(topicId)}" data-coord="${escapeHtml(item.coord)}">
+      <textarea name="body" rows="3" maxlength="2000" required placeholder="座標 ${escapeHtml(item.coord)} に関する自分用メモを記入（最大2000文字）"></textarea>
+      <button type="submit" class="btn-primary">自分用メモを追加</button>
+    </form>
+  </section>`;
 }
 
 function renderCommentsSection(item) {
@@ -1670,6 +2104,7 @@ function renderComparePanel() {
       ${renderRefChips(item.refs, "この命題が参照する前提")}
       ${renderRefChips(backRefs, "この命題を参照している命題")}
       ${renderBibliographySection(item)}
+      ${renderCoordMemoSection(item)}
       ${renderCommentsSection(item)}
       <div class="detail-pager">
         <button type="button" class="pager-btn js-pager-nav" data-coord="${prev ? escapeHtml(prev.coord) : ""}" ${prev ? "" : "disabled"}>${prev ? `← 前の座標 (${escapeHtml(prev.coord)})` : "← 前の座標なし"}</button>
@@ -1688,6 +2123,7 @@ function renderAll() {
   renderStageBanner();
   renderList();
   renderComparePanel();
+  renderTopicMemoSection();
   renderTopicCommentsSection();
   renderProfilePage();
   syncUrlHash();
@@ -1697,7 +2133,7 @@ function renderAll() {
 function selectCoord(coord, { reloadComments = true } = {}) {
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
-  if (changed) state.editingCommentId = null;
+  if (changed) { state.editingCommentId = null; state.editingMemoKey = null; }
   renderList();
   renderComparePanel();
   syncUrlHash();
@@ -1712,7 +2148,7 @@ function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   if (closeDetail && state.detailOpen) { state.detailOpen = false; state.pushedDetailHistory = false; applyDetailBodyClass(); }
   const changed = state.selectedCoord !== coord;
   state.selectedCoord = coord;
-  if (changed) state.editingCommentId = null;
+  if (changed) { state.editingCommentId = null; state.editingMemoKey = null; }
   renderAll();
   if (state.detailOpen) window.scrollTo({ top: 0, behavior: "smooth" });
   else focusCard(coord);
@@ -1797,6 +2233,80 @@ function openStageDialog(stageId = null) {
     els.stageDeleteBtn.hidden = true;
   }
   els.stageDialog.showModal();
+}
+
+// === 自分用メモ共通イベントハンドラ ===
+function handleMemoClick(e) {
+  const jumpBtn = e.target.closest(".js-jump-memo-target");
+  if (jumpBtn) {
+    e.stopPropagation();
+    jumpToMemoTarget(jumpBtn.dataset.topicId, jumpBtn.dataset.coord, jumpBtn.dataset.mode);
+    return true;
+  }
+  const editBtn = e.target.closest(".js-edit-memo");
+  if (editBtn) {
+    e.stopPropagation();
+    state.editingMemoKey = makeMemoEditKey(editBtn.dataset.topicId, editBtn.dataset.coord, editBtn.dataset.id);
+    renderList();
+    renderComparePanel();
+    renderTopicMemoSection();
+    requestAnimationFrame(syncComparePanelStickyTop);
+    return true;
+  }
+  if (e.target.closest(".js-cancel-edit-memo")) {
+    e.stopPropagation();
+    state.editingMemoKey = null;
+    renderList();
+    renderComparePanel();
+    renderTopicMemoSection();
+    requestAnimationFrame(syncComparePanelStickyTop);
+    return true;
+  }
+  const delBtn = e.target.closest(".js-delete-memo");
+  if (delBtn) {
+    e.stopPropagation();
+    if (!confirm("この自分用メモを削除しますか？")) return;
+    const key = makeMemoEditKey(delBtn.dataset.topicId, delBtn.dataset.coord, delBtn.dataset.id);
+    if (state.editingMemoKey === key) state.editingMemoKey = null;
+    deletePrivateMemo(delBtn.dataset.topicId, delBtn.dataset.coord, delBtn.dataset.id);
+    renderList();
+    renderComparePanel();
+    renderTopicMemoSection();
+    requestAnimationFrame(syncComparePanelStickyTop);
+    return true;
+  }
+  return false;
+}
+
+function handleMemoSubmit(e) {
+  if (e.target.classList.contains("js-memo-add-form")) {
+    e.preventDefault();
+    const { topicId, coord } = e.target.dataset;
+    const bodyEl = e.target.elements.body;
+    const body = bodyEl.value.trim();
+    if (!body) return;
+    addPrivateMemo(topicId, coord, body);
+    bodyEl.value = "";
+    renderList();
+    renderComparePanel();
+    renderTopicMemoSection();
+    requestAnimationFrame(syncComparePanelStickyTop);
+    return true;
+  }
+  if (e.target.classList.contains("js-memo-edit-form")) {
+    e.preventDefault();
+    const { topicId, coord, id } = e.target.dataset;
+    const body = e.target.elements.body.value.trim();
+    if (!body) return;
+    updatePrivateMemo(topicId, coord, id, body);
+    state.editingMemoKey = null;
+    renderList();
+    renderComparePanel();
+    renderTopicMemoSection();
+    requestAnimationFrame(syncComparePanelStickyTop);
+    return true;
+  }
+  return false;
 }
 
 // === イベント登録 ===
@@ -1920,6 +2430,10 @@ els.profileContent.addEventListener("submit", async (e) => {
     } finally { btn.disabled = false; btn.textContent = "管理者へコメントを投稿"; }
   }
 });
+
+// === 論題メモセクションイベント ===
+els.topicMemoSection?.addEventListener("click", (e) => { handleMemoClick(e); });
+els.topicMemoSection?.addEventListener("submit", (e) => { handleMemoSubmit(e); });
 
 // === 論題全体へのコメントイベント ===
 els.topicCommentsSection.addEventListener("click", async (e) => {
@@ -2057,6 +2571,7 @@ els.topicDeleteBtn.addEventListener("click", async () => {
     ]);
     await deleteDoc(doc(db, "topics", targetId));
     try { localStorage.removeItem(evalStorageKey(targetId)); } catch {}
+    deleteTopicMemos(targetId);
     els.topicDialog.close();
     await loadTopics();
     await switchTopic(state.topics[0]?.id || DEFAULT_TOPIC.id);
@@ -2110,6 +2625,7 @@ els.stageDeleteBtn.addEventListener("click", async () => {
       ...targetComments.map((d) => deleteDoc(d.ref))
     ]);
     await deleteDoc(stageDoc(targetId));
+    deleteStageMemos(state.currentTopicId, targetCoords);
     els.stageDialog.close();
     await Promise.all([loadStages(), loadArguments(), loadCommentCounts()]);
     if (state.stage === targetId) state.stage = state.stages[0]?.id || "all";
@@ -2189,6 +2705,7 @@ els.stageBanner.addEventListener("click", (e) => {
 });
 els.modeButtons.forEach((b) => b.addEventListener("click", () => {
   state.mode = b.dataset.mode;
+  state.editingMemoKey = null;
   showSiteHeader();
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2200,17 +2717,27 @@ els.searchInput.addEventListener("input", (e) => {
 });
 
 els.argList.addEventListener("click", (e) => {
+  if (handleMemoClick(e)) return;
   const evalBtn = e.target.closest(".js-eval-btn");
   if (evalBtn) { e.stopPropagation(); setEvaluation(evalBtn.dataset.coord, evalBtn.dataset.eval); return; }
   const flipBtn = e.target.closest(".js-flip-btn, .js-jump-mode");
   if (flipBtn) { e.stopPropagation(); jumpTo(flipBtn.dataset.coord, flipBtn.dataset.targetMode); return; }
   const refBtn = e.target.closest(".js-ref-btn");
   if (refBtn) { e.stopPropagation(); jumpTo(refBtn.dataset.ref, null); return; }
+  const memoCoordCard = e.target.closest(".js-memo-coord-card");
+  if (memoCoordCard && !e.target.closest("form, button, textarea, input")) {
+    const coord = memoCoordCard.dataset.coord;
+    if (coord && findArg(coord) && !isMobileViewport()) selectCoord(coord);
+    return;
+  }
   const card = e.target.closest(".arg-card");
   if (card) { if (isMobileViewport()) openDetailView(card.dataset.coord); else selectCoord(card.dataset.coord); }
 });
 
+els.argList.addEventListener("submit", (e) => { handleMemoSubmit(e); });
+
 els.comparePanel.addEventListener("click", async (e) => {
+  if (handleMemoClick(e)) return;
   const evalBtn = e.target.closest(".js-eval-btn");
   if (evalBtn) { setEvaluation(evalBtn.dataset.coord, evalBtn.dataset.eval); return; }
   if (e.target.closest(".js-close-detail")) { requestCloseDetailView(); return; }
@@ -2252,6 +2779,7 @@ els.comparePanel.addEventListener("click", async (e) => {
 });
 
 els.comparePanel.addEventListener("submit", async (e) => {
+  if (handleMemoSubmit(e)) return;
   if (e.target.id === "bib-add-form") {
     e.preventDefault();
     if (!db || !state.isAdmin) return;
@@ -2300,13 +2828,14 @@ els.comparePanel.addEventListener("submit", async (e) => {
 });
 
 async function init() {
+  loadMemos();
   initPcStickyComparePanel();
   initMobileSmartHeader();
   if (auth) {
     onAuthStateChanged(auth, (user) => {
       state.currentUid = user ? user.uid : null;
       state.isAdmin = Boolean(user && user.uid === ADMIN_UID);
-      renderAdminBar(); renderStageBanner(); renderList(); renderComparePanel(); renderTopicCommentsSection(); renderProfilePage();
+      renderAdminBar(); renderStageBanner(); renderList(); renderComparePanel(); renderTopicMemoSection(); renderTopicCommentsSection(); renderProfilePage();
       requestAnimationFrame(syncComparePanelStickyTop);
     });
   }
