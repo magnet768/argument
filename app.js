@@ -2061,7 +2061,6 @@ function renderList() {
     html += `<div class="topic-group"><h3 class="topic-heading">${escapeHtml(heading)}</h3>`;
     for (const item of items) {
       const sel = showSelected && item.coord === state.selectedCoord ? "is-selected" : "";
-      const bib = item.bibliography.length ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="bib" title="参考文献 ${item.bibliography.length}件へ移動"><span class="pill-icon" aria-hidden="true">${BIB_ICON}</span><span>${item.bibliography.length}</span></span>` : "";
       const commentCount = state.commentCounts[item.coord] || 0;
       const commentPill = commentCount > 0 ? `<span role="button" tabindex="0" class="bib-count-pill js-jump-section js-count-pill" data-coord="${escapeHtml(item.coord)}" data-section="comments" title="公開コメント ${commentCount}件へ移動"><span class="pill-icon" aria-hidden="true">💬</span><span>${commentCount}</span></span>` : "";
       const memoCount = getMemosFor(state.currentTopicId, item.coord).length;
@@ -2072,7 +2071,7 @@ function renderList() {
 
       if (state.mode === "split" || (state.mode === "mine" && ev === "hold")) {
         html += `<article class="arg-card is-split ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}${commentPill}${memoPill}</div></div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${commentPill}${memoPill}</div></div>
           <div class="split-grid">
             <div class="split-col is-plus"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.plusTitle)}</div><div>${formatArgBodyHtml(item.plusBody, item.coord)}</div></div>
             <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${formatArgBodyHtml(item.minusBody, item.coord)}</div></div>
@@ -2082,7 +2081,7 @@ function renderList() {
         const sign = isPlus ? "+" : "-", oppSign = isPlus ? "-" : "+", oppMode = isPlus ? "minus" : "plus";
         const title = isPlus ? item.plusTitle : item.minusTitle, body = isPlus ? item.plusBody : item.minusBody;
         html += `<article class="arg-card ${isPlus ? "is-plus" : "is-minus"} ${sel}" data-coord="${escapeHtml(item.coord)}">
-          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${bib}${commentPill}${memoPill}</div>
+          <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${commentPill}${memoPill}</div>
           <button type="button" class="flip-btn js-flip-btn" data-coord="${escapeHtml(item.coord)}" data-target-mode="${oppMode}">⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button></div>
           <p class="card-body">${formatArgBodyHtml(body, item.coord)}</p>${refsHtml}${evalHtml}</article>`;
       }
