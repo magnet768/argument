@@ -2489,17 +2489,73 @@ body.is-detail-view .compare-panel {
   box-shadow: inset 0 0 0 1px currentColor;
 }
 
-/* 「+ 擁護」などのタブ（モード切替）の背景をそのまま全面に揃える */
-@media (max-width: 980px) {
-  .mode-group {
-    gap: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    border-radius: 8px;
-  }
+/* モード切替タブ（+擁護 / -批判 / 比較 / ☆自説 / ✎メモ）の隙間・枠線ズレを完全解消 */
+.mode-group {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 8px;
+  overflow: hidden !important;
+  background: transparent !important;
+  box-sizing: border-box;
+  isolation: isolate;
+}
 
-  .mode-group .mode-btn {
-    border-radius: 0 !important;
-    margin: 0 !important;
-  }
+/* 外枠の1pxグレー線は擬似要素で描画し、選択中タブの背面へ回す */
+.mode-group::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: inherit;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mode-group .mode-btn {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  min-width: 0;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-sizing: border-box;
+  box-shadow: none !important;
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+}
+
+.mode-group .mode-btn:not(.is-active) {
+  background: var(--surface);
+}
+
+.mode-group .mode-btn:first-child {
+  border-radius: 8px 0 0 8px !important;
+}
+
+.mode-group .mode-btn:last-child {
+  border-radius: 0 8px 8px 0 !important;
+}
+
+/* ボタン間の縦区切り線 */
+.mode-group .mode-btn + .mode-btn {
+  border-left: 1px solid var(--border) !important;
+}
+
+/* 選択中タブは外枠・区切り線より前面に出し、角丸の端まで単色でピタッと塗る */
+.mode-group .mode-btn.is-active {
+  z-index: 2;
+  border-left-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.mode-group .mode-btn.is-active + .mode-btn {
+  border-left-color: transparent !important;
 }
