@@ -93,7 +93,7 @@ const stripBasicCoordPrefix = (text) => {
 // 命題本文中の「📖1」「📚1」等をモノクロの本アイコン＋番号のジャンプボタンへ変換
 function formatArgBodyHtml(body, coord) {
   const escaped = escapeHtml(body);
-  return escaped.replace(/[📖📚]([0-9０-９]+)/g, (_, rawNum) => {
+  return escaped.replace(/(?:📖|📚)([0-9０-９]+)/gu, (_, rawNum) => {
     const num = rawNum.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
     return `<button type="button" class="bib-ref-btn js-bib-ref" data-coord="${escapeHtml(coord)}" data-bib-num="${escapeHtml(num)}" title="参考文献 [${escapeHtml(num)}] へ移動"><span class="pill-icon" aria-hidden="true">${BIB_ICON}</span><span>${escapeHtml(num)}</span></button>`;
   });
