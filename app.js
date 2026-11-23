@@ -1642,8 +1642,7 @@ function renderPageVisibility() {
   els.explorerView.hidden = !isExplorer;
   els.guideView.hidden = !isGuide;
   els.profileView.hidden = !isProfile;
-  const t = getCurrentTopic();
-  document.title = isGuide ? `使い方 | ${t.title}` : isProfile ? `管理者ページ | ${t.title}` : t.title;
+  document.title = "Argument Explorer";
 }
 
 function renderAdminCommentsSection() {
