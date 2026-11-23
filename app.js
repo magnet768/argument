@@ -10,11 +10,12 @@ const TOPIC_COMMENT_COORD = "__topic__";
 const LEGACY_TOPIC_ID = "antinatalism";
 const MEMO_STORAGE_KEY = "arg_explorer_private_memos_v1";
 const BIB_ICON = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg>`;
+const X_ICON = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`;
 
 const DEFAULT_STAGES_OBJ = typeof STAGES !== "undefined" ? STAGES : {};
 const DEFAULT_ARGUMENTS = typeof ARGUMENTS !== "undefined" ? ARGUMENTS : [];
 const DEFAULT_TOPIC = { id: "relativism", title: "相対主義と絶対主義：細分化論証エクスプローラー", plusLabel: "相対主義", minusLabel: "絶対主義", order: 1, useLegacyRoot: false };
-const DEFAULT_PROFILE = { name: "", role: "" };
+const DEFAULT_PROFILE = { name: "", role: "", xAccount: "" };
 
 const isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("ここに");
 let auth = null;
@@ -59,7 +60,7 @@ const els = {
   adminBadge: $("admin-badge"), addStageBtn: $("add-stage-btn"), addArgBtn: $("add-arg-btn"), backupOpenBtn: $("backup-open-btn"),
   loginOpenBtn: $("login-open-btn"), logoutBtn: $("logout-btn"),
   loginDialog: $("login-dialog"), loginForm: $("login-form"), loginEmail: $("login-email"), loginPassword: $("login-password"), loginError: $("login-error"),
-  profileDialog: $("profile-dialog"), profileForm: $("profile-form"), profileName: $("profile-name"), profileRole: $("profile-role"), profileError: $("profile-error"),
+  profileDialog: $("profile-dialog"), profileForm: $("profile-form"), profileName: $("profile-name"), profileRole: $("profile-role"), profileX: $("profile-x"), profileError: $("profile-error"),
   topicDialog: $("topic-dialog"), topicDialogTitle: $("topic-dialog-title"), topicForm: $("topic-form"), topicId: $("topic-id"),
   topicTitle: $("topic-title"), topicPlusLabel: $("topic-plus-label"), topicMinusLabel: $("topic-minus-label"), topicDeleteBtn: $("topic-delete-btn"), topicError: $("topic-error"),
   argDialog: $("arg-dialog"), argDialogTitle: $("arg-dialog-title"), argForm: $("arg-form"), argCoord: $("arg-coord"), argStage: $("arg-stage"),
@@ -99,9 +100,19 @@ function formatArgBodyHtml(body, coord) {
   });
 }
 
+const parseXAccount = (raw) => {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const urlMatch = s.match(/^(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x\.com|twitter\.com)\/([A-Za-z0-9_]+)/i);
+  const handle = urlMatch ? urlMatch[1] : s.replace(/^@+/, "");
+  if (!/^[A-Za-z0-9_]+$/.test(handle)) return null;
+  return { url: `https://x.com/${handle}`, label: `@${handle}` };
+};
+
 const normalizeProfile = (raw = {}) => ({
   name: String(raw.name ?? "").trim(),
-  role: String(raw.role ?? "").trim()
+  role: String(raw.role ?? "").trim(),
+  xAccount: String(raw.xAccount ?? "").trim()
 });
 
 const normalizeTopic = (raw) => {
@@ -1731,6 +1742,10 @@ function renderAdminCommentsSection() {
 
 function renderProfilePage() {
   const p = state.profile;
+  const xInfo = parseXAccount(p.xAccount);
+  const xLinkHtml = xInfo
+    ? `<div class="profile-links"><a class="profile-x-link" href="${escapeHtml(xInfo.url)}" target="_blank" rel="noopener noreferrer"><span class="profile-x-icon" aria-hidden="true">${X_ICON}</span><span>${escapeHtml(xInfo.label)}</span></a></div>`
+    : "";
   const editBtn = state.isAdmin ? `<button type="button" class="admin-action-btn js-open-profile-edit">管理者情報を編集</button>` : "";
   const commentsHtml = renderAdminCommentsSection();
 
@@ -1740,6 +1755,7 @@ function renderProfilePage() {
         <div>
           <h2>${escapeHtml(p.name || "管理者ページ")}</h2>
           ${p.role ? `<p class="profile-role">${escapeHtml(p.role)}</p>` : ""}
+          ${xLinkHtml}
         </div>
         ${editBtn}
       </div>
@@ -2316,6 +2332,7 @@ function openProfileDialog() {
   els.profileError.hidden = true;
   els.profileName.value = p.name;
   els.profileRole.value = p.role;
+  if (els.profileX) els.profileX.value = p.xAccount;
   els.profileDialog.showModal();
 }
 function openTopicDialog(topicId = null) {
@@ -2528,9 +2545,16 @@ els.profileForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!db || !state.isAdmin) return;
   els.profileError.hidden = true;
+  const rawX = els.profileX ? els.profileX.value.trim() : "";
+  if (rawX && !parseXAccount(rawX)) {
+    els.profileError.textContent = "Xアカウントは @ユーザー名 または https://x.com/ユーザー名 の形式で入力してください。";
+    els.profileError.hidden = false;
+    return;
+  }
   const payload = {
     name: els.profileName.value.trim(),
     role: els.profileRole.value.trim(),
+    xAccount: rawX,
     updatedAt: serverTimestamp()
   };
   try {
