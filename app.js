@@ -33,7 +33,7 @@ const state = {
   commentCounts: {},
   topicComments: [], topicCommentsLoading: false, editingTopicCommentId: null,
   memos: {}, editingMemoKey: null, openMemoCards: {},
-  openSections: { coordMemo: false, coordComments: false, topicMemo: false, topicComments: false },
+  openSections: { coordBib: false, coordMemo: false, coordComments: false, topicMemo: false, topicComments: false },
   pcPanelOpen: false,
   stage: "1", mode: "plus", selectedCoord: "", evaluations: {}, query: "",
   currentUid: null, isAdmin: false, comments: [], commentsLoading: false,
@@ -167,12 +167,13 @@ const findArg = (coord) => state.arguments.find((a) => a.coord === coord);
 const isCommentOwner = (c) => Boolean(state.currentUid && c && c.authorUid && c.authorUid === state.currentUid);
 const showNotice = (msg) => { els.statusNotice.hidden = !msg; els.statusNotice.textContent = msg || ""; syncComparePanelStickyTop(); };
 
-// === メモ・コメント欄の折りたたみトグル ===
-function renderCollapsibleHeader(sectionKey, titleText, count) {
+// === 参考文献・メモ・コメント欄の折りたたみトグル ===
+function renderCollapsibleHeader(sectionKey, titleContent, count, { isHtml = false } = {}) {
   const isOpen = Boolean(state.openSections[sectionKey]);
+  const titleMarkup = isHtml ? titleContent : escapeHtml(titleContent);
   return `<h3 class="panel-section-title is-collapsible">
     <button type="button" class="section-toggle-btn js-toggle-section" data-section-key="${escapeHtml(sectionKey)}" aria-expanded="${isOpen ? "true" : "false"}">
-      <span>${escapeHtml(titleText)}</span>
+      <span>${titleMarkup}</span>
       <span class="section-toggle-right">
         <span class="bib-count-pill">${count}件</span>
         <span class="section-toggle-chevron" aria-hidden="true">▾</span>
@@ -187,7 +188,7 @@ function handleSectionToggleClick(e) {
   const key = btn.dataset.sectionKey;
   if (!(key in state.openSections)) return false;
   state.openSections[key] = !state.openSections[key];
-  if (key === "coordMemo" || key === "coordComments") renderComparePanel();
+  if (key === "coordBib" || key === "coordMemo" || key === "coordComments") renderComparePanel();
   else if (key === "topicMemo") renderTopicMemoSection();
   else if (key === "topicComments") renderTopicCommentsSection();
   requestAnimationFrame(syncComparePanelStickyTop);
@@ -366,7 +367,7 @@ async function openMemoCardTarget(topicId, coord = "") {
 
 async function openCoordAndScrollToSection(coord, section) {
   if (!findArg(coord)) return;
-  const targetKey = section === "memo" ? "coordMemo" : section === "comments" ? "coordComments" : null;
+  const targetKey = section === "bib" ? "coordBib" : section === "memo" ? "coordMemo" : section === "comments" ? "coordComments" : null;
   const sectionId = section === "bib" ? "detail-bib-section" : section === "memo" ? "detail-memo-section" : "detail-comments-section";
   const changed = state.selectedCoord !== coord;
   const wasDetailOpen = state.detailOpen;
@@ -1334,6 +1335,7 @@ async function applyUrlHashState() {
     } else {
       state.detailOpen = false;
       state.pcPanelOpen = true;
+      state.openSections.coordBib = false;
       state.openSections.coordMemo = false;
       state.openSections.coordComments = false;
       renderAll();
@@ -1411,6 +1413,7 @@ function openDetailView(coord, { pushBrowserHistory = true, resetScroll = false,
   state.editingCommentId = null;
   state.editingMemoKey = null;
   if (changed || !wasOpen) {
+    state.openSections.coordBib = false;
     state.openSections.coordMemo = false;
     state.openSections.coordComments = false;
   }
@@ -1601,6 +1604,7 @@ async function switchTopic(topicId, { scrollTop = true } = {}) {
   state.editingMemoKey = null;
   state.pcPanelOpen = false;
   state.selectedCoord = "";
+  state.openSections.coordBib = false;
   state.openSections.coordMemo = false;
   state.openSections.coordComments = false;
   state.openSections.topicMemo = false;
@@ -2070,6 +2074,7 @@ function renderList() {
 }
 
 function renderBibliographySection(item) {
+  const isOpen = Boolean(state.openSections.coordBib);
   const listHtml = item.bibliography.length === 0
     ? `<p class="empty-muted">この座標に登録された参考文献はまだありません。</p>`
     : `<ul class="bib-list">${item.bibliography.map((b, i) => {
@@ -2084,7 +2089,12 @@ function renderBibliographySection(item) {
     <input type="url" id="bib-url" placeholder="参照URL（任意・https://...）" />
     <input type="text" id="bib-note" placeholder="関連箇所・メモ（任意）" />
     <button type="submit" class="btn-primary">参考文献を追加</button></form>` : "";
-  return `<section class="panel-section" id="detail-bib-section"><h3 class="panel-section-title"><span>${BIB_ICON} 参考文献</span><span class="bib-count-pill">${item.bibliography.length}件</span></h3>${listHtml}${formHtml}</section>`;
+  return `<section class="panel-section" id="detail-bib-section">
+    ${renderCollapsibleHeader("coordBib", `${BIB_ICON} 参考文献`, item.bibliography.length, { isHtml: true })}
+    <div class="section-collapsible-body" ${isOpen ? "" : "hidden"}>
+      ${listHtml}${formHtml}
+    </div>
+  </section>`;
 }
 
 function renderCoordMemoSection(item) {
@@ -2240,6 +2250,7 @@ function selectCoord(coord, { reloadComments = true, scrollPanelTop = true } = {
   if (changed) {
     state.editingCommentId = null;
     state.editingMemoKey = null;
+    state.openSections.coordBib = false;
     state.openSections.coordMemo = false;
     state.openSections.coordComments = false;
   }
@@ -2266,6 +2277,7 @@ function jumpTo(coord, targetMode, { closeDetail = false } = {}) {
   if (changed) {
     state.editingCommentId = null;
     state.editingMemoKey = null;
+    state.openSections.coordBib = false;
     state.openSections.coordMemo = false;
     state.openSections.coordComments = false;
   }
@@ -2851,6 +2863,7 @@ els.stageTabs.addEventListener("click", (e) => {
       const first = state.arguments.find((a) => a.stage === state.stage);
       if (first) {
         state.selectedCoord = first.coord;
+        state.openSections.coordBib = false;
         state.openSections.coordMemo = false;
         state.openSections.coordComments = false;
         loadCommentsForCoord(first.coord);
