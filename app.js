@@ -90,6 +90,15 @@ const stripBasicCoordPrefix = (text) => {
   return stripped || s;
 };
 
+// 命題本文中の「📖1」「📚1」等をモノクロの本アイコン＋番号のジャンプボタンへ変換
+function formatArgBodyHtml(body, coord) {
+  const escaped = escapeHtml(body);
+  return escaped.replace(/[📖📚]([0-9０-９]+)/g, (_, rawNum) => {
+    const num = rawNum.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+    return `<button type="button" class="bib-ref-btn js-bib-ref" data-coord="${escapeHtml(coord)}" data-bib-num="${escapeHtml(num)}" title="参考文献 [${escapeHtml(num)}] へ移動"><span class="pill-icon" aria-hidden="true">${BIB_ICON}</span><span>${escapeHtml(num)}</span></button>`;
+  });
+}
+
 const normalizeProfile = (raw = {}) => ({
   name: String(raw.name ?? "").trim(),
   role: String(raw.role ?? "").trim()
@@ -365,24 +374,47 @@ async function openMemoCardTarget(topicId, coord = "") {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function openCoordAndScrollToSection(coord, section) {
+async function openCoordAndScrollToSection(coord, section, bibNum = null) {
   if (!findArg(coord)) return;
   const targetKey = section === "bib" ? "coordBib" : section === "memo" ? "coordMemo" : section === "comments" ? "coordComments" : null;
   const sectionId = section === "bib" ? "detail-bib-section" : section === "memo" ? "detail-memo-section" : "detail-comments-section";
   const changed = state.selectedCoord !== coord;
   const wasDetailOpen = state.detailOpen;
 
-  if (isMobileViewport()) {
-    openDetailView(coord, { reloadComments: false });
+  const scrollToTarget = () => {
+    requestAnimationFrame(() => {
+      syncComparePanelStickyTop();
+      const itemTarget = bibNum ? $(`detail-bib-item-${bibNum}`) : null;
+      const target = itemTarget || $(sectionId);
+      if (!target) return;
+      if (isMobileViewport() || state.detailOpen) {
+        target.scrollIntoView({ behavior: "smooth", block: itemTarget ? "center" : "start" });
+      } else {
+        const panel = els.comparePanel;
+        const panelRect = panel.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const offset = itemTarget ? 28 : 12;
+        const nextTop = panel.scrollTop + (targetRect.top - panelRect.top) - offset;
+        panel.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
+      }
+      if (itemTarget) {
+        itemTarget.classList.remove("is-bib-flash");
+        void itemTarget.offsetWidth;
+        itemTarget.classList.add("is-bib-flash");
+      }
+    });
+  };
+
+  if (isMobileViewport() || state.detailOpen) {
+    if (!wasDetailOpen || changed) {
+      openDetailView(coord, { reloadComments: false });
+    }
     if (targetKey) {
       state.openSections[targetKey] = true;
       renderComparePanel();
     }
     if (changed || !wasDetailOpen) await loadCommentsForCoord(coord);
-    requestAnimationFrame(() => {
-      const target = $(sectionId);
-      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    scrollToTarget();
   } else {
     selectCoord(coord, { reloadComments: false, scrollPanelTop: false });
     if (targetKey) {
@@ -390,20 +422,7 @@ async function openCoordAndScrollToSection(coord, section) {
       renderComparePanel();
     }
     if (changed) await loadCommentsForCoord(coord);
-    requestAnimationFrame(() => {
-      syncComparePanelStickyTop();
-      const target = $(sectionId);
-      if (!target) return;
-      if (state.detailOpen) {
-        target.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else {
-        const panel = els.comparePanel;
-        const panelRect = panel.getBoundingClientRect();
-        const targetRect = target.getBoundingClientRect();
-        const nextTop = panel.scrollTop + (targetRect.top - panelRect.top) - 12;
-        panel.scrollTo({ top: Math.max(0, nextTop), behavior: "smooth" });
-      }
-    });
+    scrollToTarget();
   }
 }
 
@@ -2055,8 +2074,8 @@ function renderList() {
         html += `<article class="arg-card is-split ${sel}" data-coord="${escapeHtml(item.coord)}">
           <div class="card-header"><div class="card-title-wrap"><span class="coord-badge is-neutral">座標 ${escapeHtml(item.coord)}</span>${bib}${commentPill}${memoPill}</div></div>
           <div class="split-grid">
-            <div class="split-col is-plus"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.plusTitle)}</div><div>${escapeHtml(item.plusBody)}</div></div>
-            <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${escapeHtml(item.minusBody)}</div></div>
+            <div class="split-col is-plus"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.plusTitle)}</div><div>${formatArgBodyHtml(item.plusBody, item.coord)}</div></div>
+            <div class="split-col is-minus"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span><div class="split-col-title">${escapeHtml(item.minusTitle)}</div><div>${formatArgBodyHtml(item.minusBody, item.coord)}</div></div>
           </div>${refsHtml}${evalHtml}</article>`;
       } else {
         const isPlus = state.mode === "mine" ? ev === "plus" : state.mode === "plus";
@@ -2065,7 +2084,7 @@ function renderList() {
         html += `<article class="arg-card ${isPlus ? "is-plus" : "is-minus"} ${sel}" data-coord="${escapeHtml(item.coord)}">
           <div class="card-header"><div class="card-title-wrap"><span class="coord-badge ${isPlus ? "is-plus" : "is-minus"}">${sign}${escapeHtml(item.coord)}</span><h4 class="card-title">${escapeHtml(title)}</h4>${bib}${commentPill}${memoPill}</div>
           <button type="button" class="flip-btn js-flip-btn" data-coord="${escapeHtml(item.coord)}" data-target-mode="${oppMode}">⇄ ${oppSign}${escapeHtml(item.coord)} へ反転</button></div>
-          <p class="card-body">${escapeHtml(body)}</p>${refsHtml}${evalHtml}</article>`;
+          <p class="card-body">${formatArgBodyHtml(body, item.coord)}</p>${refsHtml}${evalHtml}</article>`;
       }
     }
     html += `</div>`;
@@ -2079,13 +2098,15 @@ function renderBibliographySection(item) {
     ? `<p class="empty-muted">この座標に登録された参考文献はまだありません。</p>`
     : `<ul class="bib-list">${item.bibliography.map((b, i) => {
         const href = safeUrl(b.url);
-        return `<li class="bib-item"><div class="bib-item-head"><span class="bib-citation">${escapeHtml(b.citation)}</span>
+        const numMatch = String(b.citation ?? "").trim().match(/^\[(\d+)\]/);
+        const bibNum = numMatch ? numMatch[1] : String(i + 1);
+        return `<li class="bib-item" id="detail-bib-item-${escapeHtml(bibNum)}" data-bib-num="${escapeHtml(bibNum)}"><div class="bib-item-head"><span class="bib-citation">${escapeHtml(b.citation)}</span>
           ${state.isAdmin ? `<button type="button" class="btn-xs-danger js-delete-bib" data-index="${i}">削除</button>` : ""}</div>
           ${b.note ? `<p class="bib-note">${escapeHtml(b.note)}</p>` : ""}
           ${href ? `<a class="bib-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(href)}</a>` : ""}</li>`;
       }).join("")}</ul>`;
   const formHtml = state.isAdmin ? `<form id="bib-add-form" class="mini-form">
-    <input type="text" id="bib-citation" required placeholder="書誌情報（例：著者名『書名』出版年）" />
+    <input type="text" id="bib-citation" required placeholder="書誌情報（例：[1] 著者名『書名』出版年）" />
     <input type="url" id="bib-url" placeholder="参照URL（任意・https://...）" />
     <input type="text" id="bib-note" placeholder="関連箇所・メモ（任意）" />
     <button type="submit" class="btn-primary">参考文献を追加</button></form>` : "";
@@ -2206,12 +2227,12 @@ function renderComparePanel() {
       <div class="compare-box is-plus">
         <div class="compare-box-head"><span class="coord-badge is-plus">+${escapeHtml(item.coord)}</span>
         <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="plus">一覧で表示</button></div>
-        <h3>${escapeHtml(item.plusTitle)}</h3><p>${escapeHtml(item.plusBody)}</p>
+        <h3>${escapeHtml(item.plusTitle)}</h3><p>${formatArgBodyHtml(item.plusBody, item.coord)}</p>
       </div>
       <div class="compare-box is-minus">
         <div class="compare-box-head"><span class="coord-badge is-minus">-${escapeHtml(item.coord)}</span>
         <button type="button" class="flip-btn js-jump-mode" data-coord="${escapeHtml(item.coord)}" data-target-mode="minus">一覧で表示</button></div>
-        <h3>${escapeHtml(item.minusTitle)}</h3><p>${escapeHtml(item.minusBody)}</p>
+        <h3>${escapeHtml(item.minusTitle)}</h3><p>${formatArgBodyHtml(item.minusBody, item.coord)}</p>
       </div>
       ${renderRefChips(item.refs, "この命題が参照する前提")}
       ${renderRefChips(backRefs, "この命題を参照している命題")}
@@ -2903,6 +2924,12 @@ els.argList.addEventListener("click", (e) => {
     return;
   }
   if (handleMemoClick(e)) return;
+  const bibRefBtn = e.target.closest(".js-bib-ref");
+  if (bibRefBtn) {
+    e.stopPropagation();
+    openCoordAndScrollToSection(bibRefBtn.dataset.coord, "bib", bibRefBtn.dataset.bibNum);
+    return;
+  }
   const sectionBtn = e.target.closest(".js-jump-section");
   if (sectionBtn) {
     e.stopPropagation();
@@ -2939,6 +2966,12 @@ els.argList.addEventListener("submit", (e) => { handleMemoSubmit(e); });
 els.comparePanel.addEventListener("click", async (e) => {
   if (handleSectionToggleClick(e)) return;
   if (handleMemoClick(e)) return;
+  const bibRefBtn = e.target.closest(".js-bib-ref");
+  if (bibRefBtn) {
+    e.stopPropagation();
+    openCoordAndScrollToSection(bibRefBtn.dataset.coord, "bib", bibRefBtn.dataset.bibNum);
+    return;
+  }
   const evalBtn = e.target.closest(".js-eval-btn");
   if (evalBtn) { setEvaluation(evalBtn.dataset.coord, evalBtn.dataset.eval); return; }
   if (e.target.closest(".js-close-detail")) { requestCloseDetailView(); return; }
